@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTournamentStore } from '../store/useTournamentStore';
-import type { ScoringSystem, Group } from '../store/useTournamentStore';
+import type { ScoringSystem, Group, TieBreaker, PhaseConfig, PhaseType, MatchFormat } from '../store/useTournamentStore';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, KeyRound, Save, Trophy } from 'lucide-react';
+import { Plus, Trash2, KeyRound, Save, Trophy, Settings2 } from 'lucide-react';
 
 export default function CreateTournament() {
   const createTournament = useTournamentStore((state) => state.createTournament);
@@ -14,6 +14,15 @@ export default function CreateTournament() {
   const [name, setName] = useState('');
   const [scoringSystem, setScoringSystem] = useState<ScoringSystem>('single_set');
   const [playoffScoringSystem, setPlayoffScoringSystem] = useState<ScoringSystem>('best_of_3');
+
+  // Advanced Config State
+  const [qualifiersPerGroup, setQualifiersPerGroup] = useState<number>(2);
+  const [tieBreakers] = useState<TieBreaker[]>(['head_to_head', 'point_difference', 'set_quotient']);
+  const [knockoutPhases, setKnockoutPhases] = useState<PhaseConfig[]>([
+    { type: 'semi_finals', matchFormat: 'single_game' },
+    { type: 'finals', matchFormat: 'single_game' }
+  ]);
+
   const [groups, setGroups] = useState<Group[]>([
     { id: '1', name: 'Girone A', teams: [] }
   ]);
@@ -46,7 +55,9 @@ export default function CreateTournament() {
             player2: '',
             points: 0,
             setsWon: 0,
-            setsLost: 0
+            setsLost: 0,
+            totalPointsScored: 0,
+            totalPointsConceded: 0
           }]
         };
       }
@@ -89,7 +100,7 @@ export default function CreateTournament() {
       return;
     }
 
-    createTournament(name, scoringSystem, playoffScoringSystem, groups);
+    createTournament(name, scoringSystem, playoffScoringSystem, groups, qualifiersPerGroup, tieBreakers, knockoutPhases);
     // In a real app, if generateApi is true, we would also generate and save an API Key to Firestore here.
     navigate('/');
   };
@@ -160,6 +171,84 @@ export default function CreateTournament() {
                   Best of 3 (21,21,15)
                 </button>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Regole di Qualificazione e Fasi Finali */}
+        <section className="glass-panel p-6 flex flex-col gap-6 border-t-[3px] border-t-neon-orange">
+          <div className="flex items-center gap-2 mb-2">
+            <Settings2 className="w-5 h-5 text-neon-orange" />
+            <h2 className="text-xl font-bold text-white">Regole e Qualificazioni</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-gray-300">Squadre Qualificate per Girone</label>
+              <input
+                type="number"
+                min="1"
+                value={qualifiersPerGroup}
+                onChange={(e) => setQualifiersPerGroup(parseInt(e.target.value) || 2)}
+                className="input-glass"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-gray-300">Regole di Spareggio (Ordine di priorità)</label>
+              <div className="text-sm text-gray-400 bg-[rgba(0,0,0,0.2)] p-3 rounded border border-[rgba(255,255,255,0.05)]">
+                1. Scontro Diretto (Head-to-head)<br/>
+                2. Differenza Punti<br/>
+                3. Quoziente Set
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 mt-4">
+            <label className="text-sm font-medium text-gray-300">Struttura Fasi Finali (Tabellone)</label>
+            <div className="flex flex-col gap-3">
+              {knockoutPhases.map((phase, idx) => (
+                <div key={idx} className="flex gap-4 items-center bg-[rgba(0,0,0,0.2)] p-3 rounded border border-[rgba(255,255,255,0.05)]">
+                  <select
+                    value={phase.type}
+                    onChange={(e) => {
+                      const newP = [...knockoutPhases];
+                      newP[idx].type = e.target.value as PhaseType;
+                      setKnockoutPhases(newP);
+                    }}
+                    className="input-glass flex-1 bg-[rgba(0,0,0,0.5)]"
+                  >
+                    <option value="round_16">Ottavi di Finale</option>
+                    <option value="quarter_finals">Quarti di Finale</option>
+                    <option value="semi_finals">Semifinali</option>
+                    <option value="finals">Finale</option>
+                  </select>
+
+                  <select
+                    value={phase.matchFormat}
+                    onChange={(e) => {
+                      const newP = [...knockoutPhases];
+                      newP[idx].matchFormat = e.target.value as MatchFormat;
+                      setKnockoutPhases(newP);
+                    }}
+                    className="input-glass flex-1 bg-[rgba(0,0,0,0.5)]"
+                  >
+                    <option value="single_game">Gara Secca</option>
+                    <option value="home_and_away">Andata e Ritorno</option>
+                  </select>
+
+                  <button type="button" onClick={() => setKnockoutPhases(knockoutPhases.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-300 p-2">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setKnockoutPhases([...knockoutPhases, { type: 'finals', matchFormat: 'single_game' }])}
+                className="text-sm text-neon-orange hover:text-white transition-colors text-left flex items-center gap-1 mt-1"
+              >
+                <Plus className="w-4 h-4" /> Aggiungi Fase Eliminatoria
+              </button>
             </div>
           </div>
         </section>
