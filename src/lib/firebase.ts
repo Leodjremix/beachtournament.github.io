@@ -3,15 +3,24 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 // Your web app's Firebase configuration
-// In a real app, these should be environment variables
+// These are loaded from environment variables (e.g., .env file locally or GitHub Actions)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "demo-api-key",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "demo-project.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "demo-project",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "demo-project.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1234567890",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1234567890:web:abcdef"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
+
+// Debug: Check if env vars are loaded (masking the key for security)
+if (!firebaseConfig.apiKey) {
+  console.error("🔥 ERRORE FIREBASE: L'API Key manca! Controlla il file .env in locale o le Variables su GitHub.");
+} else if (firebaseConfig.apiKey === "demo-api-key") {
+  console.warn("⚠️ ATTENZIONE: Stai ancora usando la demo-api-key finta.");
+} else {
+  console.log("✅ Firebase config trovata. API Key inizia con:", firebaseConfig.apiKey.substring(0, 5) + "...");
+}
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
