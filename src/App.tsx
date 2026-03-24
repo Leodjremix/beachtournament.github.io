@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { useTournamentStore } from './store/useTournamentStore';
 import { Volleyball, Trophy, Plus, LayoutDashboard } from 'lucide-react';
 import Home from './pages/Home';
