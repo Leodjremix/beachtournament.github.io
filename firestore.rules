@@ -1,0 +1,44 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Funzione helper per verificare se l'utente è autenticato e ha ruolo admin
+    function isAdmin() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Collezione Utenti (Lettura pubblica a se stessi per il ruolo, scrittura solo admin)
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false; // Solo creabili manualmente da console Firebase all'inizio
+    }
+
+    // Tornei e sottomodelli (Gruppi, Partite)
+    // Chiunque può leggere (Visitatore)
+    // Solo l'Admin può scrivere/modificare
+    match /tournaments/{tournamentId} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      match /groups/{groupId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+
+      match /matches/{matchId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+    }
+
+    // API Pubblica Serverless per App Esterne
+    // Le API Key sono salvate come ID del documento: /public_tournaments/{API_KEY}
+    match /public_tournaments/{apiKey} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

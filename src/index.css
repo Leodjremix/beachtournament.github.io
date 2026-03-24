@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-blue: #00f3ff;
+  --color-brand-orange: #ff5e00;
+  --color-dark-bg: #0b0c10;
+  --color-glass: rgba(255, 255, 255, 0.05);
+  --color-glass-border: rgba(255, 255, 255, 0.1);
+}
+
+@layer base {
+  body {
+    @apply bg-[#0b0c10] text-gray-200 min-h-screen font-sans;
+    background-image:
+      radial-gradient(circle at 15% 50%, rgba(0, 243, 255, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 85% 30%, rgba(255, 94, 0, 0.15) 0%, transparent 50%);
+    background-attachment: fixed;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-[rgba(255,255,255,0.05)] backdrop-blur-md border border-[rgba(255,255,255,0.1)] rounded-xl shadow-lg;
+  }
+
+  .text-neon-blue {
+    @apply text-[#00f3ff] drop-shadow-[0_0_8px_rgba(0,243,255,0.8)];
+  }
+
+  .text-neon-orange {
+    @apply text-[#ff5e00] drop-shadow-[0_0_8px_rgba(255,94,0,0.8)];
+  }
+
+  .border-neon-blue {
+    @apply border-[#00f3ff] shadow-[0_0_10px_rgba(0,243,255,0.5)];
+  }
+
+  .border-neon-orange {
+    @apply border-[#ff5e00] shadow-[0_0_10px_rgba(255,94,0,0.5)];
+  }
+
+  .bg-neon-blue {
+    @apply bg-[#00f3ff] shadow-[0_0_15px_rgba(0,243,255,0.6)];
+  }
+
+  .bg-neon-orange {
+    @apply bg-[#ff5e00] shadow-[0_0_15px_rgba(255,94,0,0.6)];
+  }
+
+  .btn-primary {
+    @apply px-4 py-2 rounded-lg font-bold transition-all duration-300 bg-transparent border border-[#00f3ff] text-[#00f3ff] hover:bg-[#00f3ff] hover:text-[#0b0c10];
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 rounded-lg font-bold transition-all duration-300 bg-transparent border border-[#ff5e00] text-[#ff5e00] hover:bg-[#ff5e00] hover:text-[#0b0c10];
+  }
+
+  .input-glass {
+    @apply w-full bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.2)] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#00f3ff] focus:shadow-[0_0_10px_rgba(0,243,255,0.3)] transition-all;
+  }
+}
