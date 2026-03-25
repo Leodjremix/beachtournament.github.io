@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { db } from '../lib/firebase';
-import { doc, writeBatch, collection, getDocs, getDoc } from 'firebase/firestore';
+import { doc, writeBatch, collection, getDocs, getDoc, onSnapshot } from 'firebase/firestore';
 
 export type TieBreaker = 'head_to_head' | 'point_difference' | 'set_quotient';
 export type MatchFormat = 'single_game' | 'home_and_away';
@@ -13,8 +13,8 @@ export type PhaseConfig = {
 
 export type Team = {
   id: string;
-  player1: string;
-  player2: string;
+  name: string;
+  players: string[]; // Lista flessibile dei partecipanti (min 2 per beach volley, ma gestito come array)
   points: number;
   setsWon: number;
   setsLost: number;
@@ -67,35 +67,99 @@ interface TournamentState {
   setCurrentTournament: (tournament: Tournament | null) => void;
   createTournament: (name: string, scoring: ScoringSystem, playoffScoring: ScoringSystem, groups: Group[], qualifiersPerGroup: number, tieBreakers: TieBreaker[], knockoutPhases: PhaseConfig[]) => Promise<void>;
   updateMatchScoreRealtime: (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean, tournamentId: string, apiKey: string) => Promise<void>;
+  tournamentsList: Tournament[];
   generateKnockoutBracket: (tournamentId: string) => Promise<void>;
   archiveTournament: (tournamentId: string) => Promise<void>;
+  fetchTournaments: () => Promise<void>;
+  subscribeToTournament: (tournamentId: string) => () => void;
 }
 
 export const useTournamentStore = create<TournamentState>((set, get) => ({
   currentTournament: null,
+  tournamentsList: [],
 
   setCurrentTournament: (tournament) => set({ currentTournament: tournament }),
+
+  fetchTournaments: async () => {
+    try {
+        const querySnapshot = await getDocs(collection(db, 'tournaments'));
+        const list = querySnapshot.docs.map(doc => doc.data() as Tournament);
+        set({ tournamentsList: list });
+    } catch (error) {
+        console.error("Error fetching tournaments:", error);
+    }
+  },
+
+  subscribeToTournament: (tournamentId: string) => {
+      let unsubMatches: () => void = () => {};
+
+      // Sottoscrizione al documento principale del torneo
+      const unsubTournament = onSnapshot(doc(db, 'tournaments', tournamentId), (docSnapshot: any) => {
+          if (docSnapshot.exists()) {
+              const tData = docSnapshot.data() as Tournament;
+
+              // Sottoscrizione ai match del torneo (ricrea ogni volta che cambia il torneo, ottimizzabile)
+              unsubMatches = onSnapshot(collection(db, `tournaments/${tournamentId}/matches`), (matchesSnapshot: any) => {
+                  const matches = matchesSnapshot.docs.map((mDoc: any) => mDoc.data() as Match);
+
+                  // Ordiniamo i match dei gironi per round (legIndex)
+                  matches.sort((a: Match, b: Match) => (a.legIndex || 0) - (b.legIndex || 0));
+
+                  set({ currentTournament: { ...tData, matches } });
+              });
+          }
+      });
+
+      return () => {
+          unsubTournament();
+          unsubMatches();
+      };
+  },
 
   createTournament: async (name, scoringSystem, playoffScoringSystem, groups, qualifiersPerGroup, tieBreakers, knockoutPhases) => {
     const tournamentId = Math.random().toString(36).substring(7);
     const apiKey = Math.random().toString(36).substring(7) + Math.random().toString(36).substring(7);
 
     const matches: Match[] = [];
+
+    // Algoritmo Round-Robin (Circle Method) per i gironi
     groups.forEach(group => {
-      const teams = group.teams;
-      for (let i = 0; i < teams.length; i++) {
-        for (let j = i + 1; j < teams.length; j++) {
-          matches.push({
-            id: Math.random().toString(36).substring(7),
-            phaseType: 'groups',
-            team1Id: teams[i].id,
-            team2Id: teams[j].id,
-            team1Score: [0],
-            team2Score: [0],
-            isFinished: false,
-            groupId: group.id
-          });
+      // Per il circle method serve un numero pari di squadre, aggiungiamo un "dummy" se dispari
+      const teams = [...group.teams];
+      const hasDummy = teams.length % 2 !== 0;
+      if (hasDummy) {
+          teams.push({ id: 'dummy', name: 'Bye', players: [], points: 0, setsWon: 0, setsLost: 0, totalPointsScored: 0, totalPointsConceded: 0 });
+      }
+
+      const numTeams = teams.length;
+      const numRounds = numTeams - 1;
+      const halfSize = numTeams / 2;
+
+      for (let round = 0; round < numRounds; round++) {
+        for (let i = 0; i < halfSize; i++) {
+            const team1 = teams[i];
+            const team2 = teams[numTeams - 1 - i];
+
+            // Se nessuna delle due è il dummy team, crea la partita
+            if (team1.id !== 'dummy' && team2.id !== 'dummy') {
+                matches.push({
+                    id: Math.random().toString(36).substring(7),
+                    phaseType: 'groups',
+                    team1Id: team1.id,
+                    team2Id: team2.id,
+                    team1Score: [0],
+                    team2Score: [0],
+                    isFinished: false,
+                    groupId: group.id,
+                    // legIndex usato impropriamente come round marker per ordinarle nell'UI
+                    legIndex: round + 1
+                });
+            }
         }
+
+        // Ruota gli elementi (tranne il primo)
+        const elementToMove = teams.pop()!;
+        teams.splice(1, 0, elementToMove);
       }
     });
 

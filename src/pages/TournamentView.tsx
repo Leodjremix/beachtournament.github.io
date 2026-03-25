@@ -1,14 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTournamentStore } from '../store/useTournamentStore';
-import type { Match } from '../store/useTournamentStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { ArrowLeft, Copy, Check, Lock, Trophy, Play } from 'lucide-react';
 import GroupStandings from '../components/GroupStandings';
 import LiveScore from '../components/LiveScore';
 import { KnockoutBracket } from '../components/KnockoutBracket';
-import { doc, onSnapshot, collection } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import { PartyPopper } from 'lucide-react';
 
 const TournamentView = () => {
@@ -16,44 +13,17 @@ const TournamentView = () => {
   const [activeTab, setActiveTab] = useState<'standings' | 'matches' | 'bracket'>('standings');
   const [copied, setCopied] = useState(false);
 
-  const { currentTournament, setCurrentTournament, updateMatchScoreRealtime, generateKnockoutBracket, archiveTournament } = useTournamentStore();
+  const { currentTournament, updateMatchScoreRealtime, generateKnockoutBracket, archiveTournament, subscribeToTournament } = useTournamentStore();
   const { userRole } = useAuthStore();
   const isAdmin = userRole === 'admin';
 
   useEffect(() => {
     if (!id) return;
-
-    // Ascolto in tempo reale per il documento principale del torneo
-    const unsubTournament = onSnapshot(doc(db, 'tournaments', id), (docSnapshot) => {
-      if (docSnapshot.exists()) {
-        const data = docSnapshot.data();
-
-        // Ascolto in tempo reale per le partite del torneo
-        const unsubMatches = onSnapshot(collection(db, `tournaments/${id}/matches`), (querySnapshot) => {
-          const matches: Match[] = [];
-          querySnapshot.forEach((matchDoc) => {
-            matches.push(matchDoc.data() as Match);
-          });
-
-          setCurrentTournament({
-            ...data,
-            id: data.id,
-            name: data.name,
-            scoringSystem: data.scoringSystem,
-            playoffScoringSystem: data.playoffScoringSystem,
-            groups: data.groups,
-            matches: matches,
-            apiKey: data.apiKey,
-            isArchived: data.isArchived
-          } as any);
-        });
-
-        return () => unsubMatches();
-      }
-    });
-
-    return () => unsubTournament();
-  }, [id, setCurrentTournament]);
+    const unsubscribe = subscribeToTournament(id);
+    return () => {
+      unsubscribe();
+    };
+  }, [id, subscribeToTournament]);
 
   if (!currentTournament) return <div className="text-white">Caricamento in corso o torneo non trovato...</div>;
 
@@ -170,8 +140,8 @@ const TournamentView = () => {
                   <LiveScore
                     key={match.id}
                     match={match}
-                    team1Name={`${team1.player1} & ${team1.player2}`}
-                    team2Name={`${team2.player1} & ${team2.player2}`}
+                    team1Name={team1.name}
+                    team2Name={team2.name}
                     groupName={group?.name}
                     isAdmin={isAdmin}
                     onUpdate={(mId, s1, s2, isFinished) => handleScoreUpdate(mId, s1, s2, isFinished, group?.id)}

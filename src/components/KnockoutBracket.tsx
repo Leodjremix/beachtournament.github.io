@@ -76,7 +76,7 @@ export function KnockoutBracket({ tournament, isAdmin }: { tournament: Tournamen
     // Cerca nel tournament.groups
     for (const group of tournament.groups) {
       const team = group.teams.find(t => t.id === teamId);
-      if (team) return `${team.player1} & ${team.player2}`;
+      if (team) return team.name;
     }
     return <span className="text-gray-500 italic">TBD</span>;
   };

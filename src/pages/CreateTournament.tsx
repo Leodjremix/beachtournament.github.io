@@ -51,8 +51,8 @@ export default function CreateTournament() {
           ...g,
           teams: [...g.teams, {
             id: Math.random().toString(),
-            player1: '',
-            player2: '',
+            name: '',
+            players: ['', ''], // Default 2 giocatori per beach volley, espandibile
             points: 0,
             setsWon: 0,
             setsLost: 0,
@@ -66,12 +66,45 @@ export default function CreateTournament() {
     setGroups(newGroups);
   };
 
-  const updateTeamPlayer = (groupId: string, teamId: string, playerNum: 1 | 2, value: string) => {
+  const updateTeamName = (groupId: string, teamId: string, name: string) => {
     const newGroups = groups.map(g => {
       if (g.id === groupId) {
         return {
           ...g,
-          teams: g.teams.map(t => t.id === teamId ? { ...t, [`player${playerNum}`]: value } : t)
+          teams: g.teams.map(t => t.id === teamId ? { ...t, name } : t)
+        };
+      }
+      return g;
+    });
+    setGroups(newGroups);
+  };
+
+  const updateTeamPlayer = (groupId: string, teamId: string, playerIndex: number, value: string) => {
+    const newGroups = groups.map(g => {
+      if (g.id === groupId) {
+        return {
+          ...g,
+          teams: g.teams.map(t => {
+            if (t.id === teamId) {
+                const newPlayers = [...t.players];
+                newPlayers[playerIndex] = value;
+                return { ...t, players: newPlayers };
+            }
+            return t;
+          })
+        };
+      }
+      return g;
+    });
+    setGroups(newGroups);
+  };
+
+  const addPlayerToTeam = (groupId: string, teamId: string) => {
+    const newGroups = groups.map(g => {
+      if (g.id === groupId) {
+        return {
+          ...g,
+          teams: g.teams.map(t => t.id === teamId ? { ...t, players: [...t.players, ''] } : t)
         };
       }
       return g;
@@ -95,8 +128,8 @@ export default function CreateTournament() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Validazione base
-    if (!name.trim() || groups.some(g => g.teams.some(t => !t.player1.trim() || !t.player2.trim()))) {
-      alert("Compila tutti i campi (nome torneo e nomi giocatori).");
+    if (!name.trim() || groups.some(g => g.teams.some(t => !t.name.trim() || t.players.some(p => !p.trim())))) {
+      alert("Compila tutti i campi (nome torneo, nome squadra e nomi giocatori).");
       return;
     }
 
@@ -292,32 +325,47 @@ export default function CreateTournament() {
 
                 <div className="flex flex-col gap-3 mt-2">
                   {group.teams.map((team) => (
-                    <div key={team.id} className="flex items-center gap-2 bg-[rgba(0,0,0,0.3)] p-2 rounded-lg border border-[rgba(255,255,255,0.05)]">
-                      <div className="flex-1 flex gap-2">
-                        <input
-                          type="text"
-                          placeholder="Giocatore 1"
-                          value={team.player1}
-                          onChange={(e) => updateTeamPlayer(group.id, team.id, 1, e.target.value)}
-                          className="w-1/2 bg-transparent text-sm text-gray-200 focus:outline-none focus:text-neon-blue px-2"
-                          required
-                        />
-                        <span className="text-gray-600 font-bold">&amp;</span>
-                        <input
-                          type="text"
-                          placeholder="Giocatore 2"
-                          value={team.player2}
-                          onChange={(e) => updateTeamPlayer(group.id, team.id, 2, e.target.value)}
-                          className="w-1/2 bg-transparent text-sm text-gray-200 focus:outline-none focus:text-neon-blue px-2"
-                          required
-                        />
-                      </div>
+                    <div key={team.id} className="flex flex-col gap-2 bg-[rgba(0,0,0,0.3)] p-3 rounded-lg border border-[rgba(255,255,255,0.05)] relative">
                       <button
                         type="button"
                         onClick={() => removeTeam(group.id, team.id)}
-                        className="p-1.5 text-gray-500 hover:text-red-400 transition-colors rounded hover:bg-[rgba(255,0,0,0.1)]"
+                        className="absolute top-3 right-3 p-1 text-gray-500 hover:text-red-400 transition-colors rounded hover:bg-[rgba(255,0,0,0.1)]"
+                        title="Rimuovi Squadra"
                       >
                         <Trash2 className="w-4 h-4" />
+                      </button>
+
+                      <input
+                        type="text"
+                        placeholder="Nome Squadra"
+                        value={team.name}
+                        onChange={(e) => updateTeamName(group.id, team.id, e.target.value)}
+                        className="w-[85%] bg-transparent font-bold text-white focus:outline-none focus:border-b focus:border-neon-blue pb-1 mb-1"
+                        required
+                      />
+
+                      <div className="flex flex-col gap-2 pl-2 border-l-2 border-neon-blue/30">
+                        {team.players.map((player, pIndex) => (
+                          <div key={pIndex} className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-gray-500 w-4">{pIndex + 1}.</span>
+                            <input
+                              type="text"
+                              placeholder={`Nome Giocatore ${pIndex + 1}`}
+                              value={player}
+                              onChange={(e) => updateTeamPlayer(group.id, team.id, pIndex, e.target.value)}
+                              className="flex-1 bg-transparent text-sm text-gray-300 focus:outline-none focus:text-neon-blue"
+                              required
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => addPlayerToTeam(group.id, team.id)}
+                        className="text-xs text-neon-blue hover:text-white transition-colors self-start mt-1 flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" /> Aggiungi Giocatore
                       </button>
                     </div>
                   ))}
