@@ -9,13 +9,14 @@ import LiveScore from '../components/LiveScore';
 import { KnockoutBracket } from '../components/KnockoutBracket';
 import { doc, onSnapshot, collection } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { PartyPopper } from 'lucide-react';
 
 const TournamentView = () => {
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState<'standings' | 'matches' | 'bracket'>('standings');
   const [copied, setCopied] = useState(false);
 
-  const { currentTournament, setCurrentTournament, updateMatchScoreRealtime, generateKnockoutBracket } = useTournamentStore();
+  const { currentTournament, setCurrentTournament, updateMatchScoreRealtime, generateKnockoutBracket, archiveTournament } = useTournamentStore();
   const { userRole } = useAuthStore();
   const isAdmin = userRole === 'admin';
 
@@ -80,6 +81,16 @@ const TournamentView = () => {
       <Link to="/" className="inline-flex items-center text-neon-blue hover:text-white mb-6 transition-colors">
         <ArrowLeft className="w-4 h-4 mr-2" /> Torna alla Dashboard
       </Link>
+
+      {currentTournament.isArchived && (
+        <div className="glass-panel p-8 mb-8 border-[rgba(255,107,0,0.5)] shadow-[0_0_30px_rgba(255,107,0,0.3)] flex flex-col items-center justify-center gap-4 text-center animate-fade-in relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-neon-orange/10 to-neon-blue/10 pointer-events-none"></div>
+          <PartyPopper className="w-16 h-16 text-neon-orange animate-bounce" />
+          <h2 className="text-3xl font-bold text-white tracking-tight">Torneo Concluso!</h2>
+          <p className="text-gray-300 text-lg">Il torneo {currentTournament.name} è stato archiviato e i dati sono ora in sola lettura.</p>
+          <p className="text-sm font-bold text-neon-blue mt-2 border border-neon-blue/30 px-4 py-1 rounded-full bg-neon-blue/10">Modalità Sola Lettura</p>
+        </div>
+      )}
 
       <div className="glass-panel p-6 md:p-8 mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -175,17 +186,27 @@ const TournamentView = () => {
           <div className="space-y-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-white">Tabellone Fasi Finali</h2>
-              {isAdmin && currentTournament.matches.filter(m => m.phaseType !== 'groups').length === 0 && (
-                 <button
-                  onClick={() => generateKnockoutBracket(currentTournament.id)}
-                  className="btn-primary flex items-center gap-2 bg-[#c5b4e3] text-[#0b0c10] hover:bg-transparent hover:text-[#c5b4e3] hover:border-[#c5b4e3] px-4 py-2 text-sm"
-                 >
-                   <Play className="w-4 h-4" /> Genera Tabellone Fasi Finali
-                 </button>
-              )}
+              <div className="flex gap-2">
+                {isAdmin && !currentTournament.isArchived && currentTournament.matches.filter(m => m.phaseType !== 'groups').length === 0 && (
+                  <button
+                    onClick={() => generateKnockoutBracket(currentTournament.id)}
+                    className="btn-primary flex items-center gap-2 bg-[#c5b4e3] text-[#0b0c10] hover:bg-transparent hover:text-[#c5b4e3] hover:border-[#c5b4e3] px-4 py-2 text-sm"
+                  >
+                    <Play className="w-4 h-4" /> Genera Tabellone Fasi Finali
+                  </button>
+                )}
+                {isAdmin && !currentTournament.isArchived && currentTournament.matches.filter(m => m.phaseType === 'finals').some(m => m.isFinished) && (
+                  <button
+                    onClick={() => archiveTournament(currentTournament.id)}
+                    className="btn-primary flex items-center gap-2 bg-neon-orange text-[#0b0c10] shadow-[0_0_15px_rgba(255,107,0,0.4)] hover:bg-transparent hover:text-neon-orange hover:border-neon-orange px-4 py-2 text-sm"
+                  >
+                    <Trophy className="w-4 h-4" /> Chiudi Torneo e Incorona Vincitore
+                  </button>
+                )}
+              </div>
             </div>
 
-            <KnockoutBracket tournament={currentTournament} isAdmin={isAdmin} />
+            <KnockoutBracket tournament={currentTournament} isAdmin={isAdmin && !currentTournament.isArchived} />
           </div>
         )}
       </div>

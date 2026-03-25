@@ -32,6 +32,7 @@ export type Match = {
   isFinished: boolean;
   groupId?: string; // only for group stage
   nextMatchId?: string; // Per il bracket
+  nextMatchSlot?: 'team1' | 'team2'; // Indica se il vincitore va nello slot 1 o 2 del prossimo match
   isHomeAndAway?: boolean;
   legIndex?: number; // 0 per andata, 1 per ritorno
 };
@@ -67,6 +68,7 @@ interface TournamentState {
   createTournament: (name: string, scoring: ScoringSystem, playoffScoring: ScoringSystem, groups: Group[], qualifiersPerGroup: number, tieBreakers: TieBreaker[], knockoutPhases: PhaseConfig[]) => Promise<void>;
   updateMatchScoreRealtime: (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean, tournamentId: string, apiKey: string) => Promise<void>;
   generateKnockoutBracket: (tournamentId: string) => Promise<void>;
+  archiveTournament: (tournamentId: string) => Promise<void>;
 }
 
 export const useTournamentStore = create<TournamentState>((set, get) => ({
@@ -177,6 +179,38 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
        }
        await batch.commit();
        return;
+    }
+
+    // --- AVANZAMENTO AUTOMATICO FASI FINALI ---
+    let updatedNextMatch: Match | null = null;
+    if (!isGroupMatch && isFinished && currentMatch.nextMatchId && currentMatch.nextMatchSlot && currentMatch.team1Id && currentMatch.team2Id) {
+        // Determina il vincitore
+        let t1SetsWon = 0, t2SetsWon = 0;
+        for (let i = 0; i < team1Score.length; i++) {
+            if (team1Score[i] > team2Score[i]) t1SetsWon++;
+            else if (team2Score[i] > team1Score[i]) t2SetsWon++;
+        }
+
+        let winnerId: string | null = null;
+        if (t1SetsWon > t2SetsWon) winnerId = currentMatch.team1Id;
+        else if (t2SetsWon > t1SetsWon) winnerId = currentMatch.team2Id;
+
+        if (winnerId) {
+            const nextMatch = tournament.matches.find(m => m.id === currentMatch.nextMatchId);
+            if (nextMatch) {
+                updatedNextMatch = { ...nextMatch };
+                if (currentMatch.nextMatchSlot === 'team1') {
+                    updatedNextMatch.team1Id = winnerId;
+                } else {
+                    updatedNextMatch.team2Id = winnerId;
+                }
+                const nextMatchRef = doc(db, `tournaments/${tournamentId}/matches`, nextMatch.id);
+                batch.update(nextMatchRef, {
+                    team1Id: updatedNextMatch.team1Id,
+                    team2Id: updatedNextMatch.team2Id
+                });
+            }
+        }
     }
 
     // --- SE E' UN MATCH DEI GIRONI, RICALCOLIAMO LA CLASSIFICA ---
@@ -304,7 +338,13 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
         const publicDoc = await getDoc(publicRef);
         if(publicDoc.exists()) {
             const pubData = publicDoc.data();
-            const pubMatches = pubData.matches.map((m: Match) => m.id === matchId ? { ...m, team1Score, team2Score, isFinished } : m);
+            let pubMatches = pubData.matches.map((m: Match) => m.id === matchId ? { ...m, team1Score, team2Score, isFinished } : m);
+
+            // Applica anche l'avanzamento al documento pubblico per i read-only clients
+            if (updatedNextMatch) {
+                pubMatches = pubMatches.map((m: Match) => m.id === updatedNextMatch!.id ? { ...m, team1Id: updatedNextMatch!.team1Id, team2Id: updatedNextMatch!.team2Id } : m);
+            }
+
             batch.update(publicRef, { matches: pubMatches });
         }
     }
@@ -321,103 +361,81 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     const qualifiers: Team[] = [];
     const qCount = tournament.qualifiersPerGroup || 2;
 
-    // Assumiamo che i team nei group siano già ordinati (l'algoritmo li ordina ad ogni update)
     tournament.groups.forEach(group => {
        for(let i=0; i < Math.min(qCount, group.teams.length); i++) {
            qualifiers.push(group.teams[i]);
        }
     });
 
-    // 2. Determina la prima fase a eliminazione
     if (!tournament.knockoutPhases || tournament.knockoutPhases.length === 0) return;
-    const firstPhase = tournament.knockoutPhases[0];
 
-    // 3. Genera accoppiamenti (semplificato: incrocio 1° vs ultimo qualificato)
-    // Se abbiamo 8 squadre: 1 vs 8, 2 vs 7, ecc.
-    // Ordiniamo tutti i qualificati (le prime di ogni girone prima, poi le seconde, ecc.)
-    // Per un incrocio vero bisognerebbe comparare i primi tra di loro, per semplicità:
     const bracketMatches: Match[] = [];
+    // Matrice temporanea per collegare i nodi dell'albero: array di array di match ids per fase
+    // phasesTree[0] = ottavi, phasesTree[1] = quarti ecc.
+    const phasesTree: string[][] = [];
 
-    // Per evitare scontri tra stesse squadre dello stesso girone, un approccio comune è
-    // invertire l'array per la seconda metà degli accoppiamenti
-    const numMatches = qualifiers.length / 2;
+    // --- STEP A: CREA I PLACEHOLDER PER TUTTE LE FASI (a partire dalla FINALE all'indietro o viceversa) ---
+    // Procediamo dalla prima fase all'ultima per calcolare il numero di match, ma i collegamenti (nextMatchId) li facciamo man mano
 
-    for (let i = 0; i < numMatches; i++) {
-        const team1 = qualifiers[i];
-        const team2 = qualifiers[qualifiers.length - 1 - i];
+    // Prima fase (i match in cui mettiamo le squadre qualificate)
+    let numMatchesForCurrentPhase = qualifiers.length / 2;
 
-        if (firstPhase.matchFormat === 'home_and_away') {
-            // Gara di andata
+    for (let pIndex = 0; pIndex < tournament.knockoutPhases.length; pIndex++) {
+        const phase = tournament.knockoutPhases[pIndex];
+        const currentPhaseIds: string[] = [];
+
+        // Creiamo i match (andata o secca)
+        for (let m = 0; m < numMatchesForCurrentPhase; m++) {
+            const matchId = Math.random().toString(36).substring(7);
+            currentPhaseIds.push(matchId);
+
             bracketMatches.push({
-                id: Math.random().toString(36).substring(7),
-                phaseType: firstPhase.type,
-                team1Id: team1?.id || null,
-                team2Id: team2?.id || null,
-                team1Score: [0],
-                team2Score: [0],
-                isFinished: false,
-                isHomeAndAway: true,
-                legIndex: 0
-            });
-            // Gara di ritorno
-            bracketMatches.push({
-                id: Math.random().toString(36).substring(7),
-                phaseType: firstPhase.type,
-                team1Id: team2?.id || null, // invertiti in casa
-                team2Id: team1?.id || null,
-                team1Score: [0],
-                team2Score: [0],
-                isFinished: false,
-                isHomeAndAway: true,
-                legIndex: 1
-            });
-        } else {
-            // Gara secca
-            bracketMatches.push({
-                id: Math.random().toString(36).substring(7),
-                phaseType: firstPhase.type,
-                team1Id: team1?.id || null,
-                team2Id: team2?.id || null,
-                team1Score: [0],
-                team2Score: [0],
-                isFinished: false,
-                isHomeAndAway: false
-            });
-        }
-    }
-
-    // Aggiungi match vuoti per le fasi successive (placeholders)
-    // Così la UI può renderizzare tutto il bracket vuoto fin dall'inizio
-    let currentMatchCount = numMatches;
-    for (let i = 1; i < tournament.knockoutPhases.length; i++) {
-        const phase = tournament.knockoutPhases[i];
-        currentMatchCount = currentMatchCount / 2; // es. da 4 ottavi si passa a 2 quarti
-
-        for(let j=0; j < currentMatchCount; j++) {
-            bracketMatches.push({
-                id: Math.random().toString(36).substring(7),
+                id: matchId,
                 phaseType: phase.type,
-                team1Id: null, // TBD
-                team2Id: null, // TBD
+                team1Id: null, // Saranno popolati dopo per la prima fase
+                team2Id: null,
                 team1Score: [0],
                 team2Score: [0],
                 isFinished: false,
                 isHomeAndAway: phase.matchFormat === 'home_and_away',
                 legIndex: 0
             });
-            if (phase.matchFormat === 'home_and_away') {
-                 bracketMatches.push({
-                    id: Math.random().toString(36).substring(7),
-                    phaseType: phase.type,
-                    team1Id: null,
-                    team2Id: null,
-                    team1Score: [0],
-                    team2Score: [0],
-                    isFinished: false,
-                    isHomeAndAway: true,
-                    legIndex: 1
-                });
+
+            // Gara di ritorno (per ora semplifichiamo: il nextMatchId andrà sempre agganciato alla gara "principale" o gestito diversamente, qui trattiamo il bracket standard secco)
+        }
+
+        phasesTree.push(currentPhaseIds);
+
+        // Colleghiamo i match della fase PRECEDENTE a questa fase NUOVA
+        if (pIndex > 0) {
+            const previousPhaseIds = phasesTree[pIndex - 1];
+            for (let i = 0; i < previousPhaseIds.length; i++) {
+                // Il match 0 e 1 della fase precedente confluiscono nel match 0 di questa fase
+                // Il match 2 e 3 nel match 1, ecc.
+                const nextMatchIndex = Math.floor(i / 2);
+                const nextMatchId = currentPhaseIds[nextMatchIndex];
+                const slotIndex = (i % 2 === 0) ? 'team1' : 'team2'; // Il primo va in team1, il secondo in team2
+
+                const prevMatchObj = bracketMatches.find(m => m.id === previousPhaseIds[i]);
+                if (prevMatchObj) {
+                    prevMatchObj.nextMatchId = nextMatchId;
+                    prevMatchObj.nextMatchSlot = slotIndex;
+                }
             }
+        }
+
+        // Dimezza per la fase successiva
+        numMatchesForCurrentPhase = numMatchesForCurrentPhase / 2;
+    }
+
+    // --- STEP B: POPOLA LA PRIMA FASE CON I QUALIFICATI ---
+    // Incroci standard (1° vs 4°, 2° vs 3° se 4 team)
+    const firstPhaseIds = phasesTree[0];
+    for (let i = 0; i < firstPhaseIds.length; i++) {
+        const match = bracketMatches.find(m => m.id === firstPhaseIds[i]);
+        if (match) {
+            match.team1Id = qualifiers[i]?.id || null;
+            match.team2Id = qualifiers[qualifiers.length - 1 - i]?.id || null;
         }
     }
 
@@ -444,6 +462,32 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
         currentTournament: {
             ...tournament,
             matches: [...tournament.matches, ...bracketMatches]
+        }
+    });
+  },
+
+  archiveTournament: async (tournamentId: string) => {
+    const state = get();
+    const tournament = state.currentTournament;
+    if (!tournament || tournament.id !== tournamentId) return;
+
+    const batch = writeBatch(db);
+
+    const tournamentRef = doc(db, 'tournaments', tournamentId);
+    batch.update(tournamentRef, { isArchived: true });
+
+    const publicRef = doc(db, 'public_tournaments', tournament.apiKey);
+    const publicDoc = await getDoc(publicRef);
+    if(publicDoc.exists()) {
+        batch.update(publicRef, { isArchived: true });
+    }
+
+    await batch.commit();
+
+    set({
+        currentTournament: {
+            ...tournament,
+            isArchived: true
         }
     });
   }
