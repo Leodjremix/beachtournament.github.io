@@ -98,6 +98,8 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
           if (docSnapshot.exists()) {
               const tData = docSnapshot.data() as Tournament;
 
+              // Disiscriviti dai match precedenti se esistono, prima di crearne di nuovi
+              unsubMatches();
               // Sottoscrizione ai match del torneo (ricrea ogni volta che cambia il torneo, ottimizzabile)
               unsubMatches = onSnapshot(collection(db, `tournaments/${tournamentId}/matches`), (matchesSnapshot: any) => {
                   const matches = matchesSnapshot.docs.map((mDoc: any) => mDoc.data() as Match);
@@ -137,8 +139,11 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
 
       for (let round = 0; round < numRounds; round++) {
         for (let i = 0; i < halfSize; i++) {
-            const team1 = teams[i];
-            const team2 = teams[numTeams - 1 - i];
+            // Alternate home/away to ensure fairness (though less relevant for neutral beach volley)
+            // It fixes potential consecutive match patterns
+            const isHome = round % 2 === 0 ? i === 0 : i !== 0;
+            const team1 = isHome ? teams[i] : teams[numTeams - 1 - i];
+            const team2 = isHome ? teams[numTeams - 1 - i] : teams[i];
 
             // Se nessuna delle due è il dummy team, crea la partita
             if (team1.id !== 'dummy' && team2.id !== 'dummy') {
@@ -158,8 +163,9 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
         }
 
         // Ruota gli elementi (tranne il primo)
-        const elementToMove = teams.pop()!;
-        teams.splice(1, 0, elementToMove);
+        // Correct implementation of standard circle method
+        const elementToMove = teams.splice(1, 1)[0];
+        teams.push(elementToMove);
       }
     });
 

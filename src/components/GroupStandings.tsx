@@ -43,7 +43,7 @@ const GroupStandings = ({ group }: GroupStandingsProps) => {
                   </td>
                   <td className="px-6 py-4 font-medium text-gray-200 flex flex-col">
                     <span className="text-white font-bold">{team.name}</span>
-                    <span className="text-xs text-gray-500">{team.players.join(' & ')}</span>
+                    <span className="text-xs text-gray-500">{team.players?.join(' & ')}</span>
                   </td>
                   <td className="px-4 py-4 text-center font-bold text-neon-orange bg-[#0b0c10]/30">
                     {team.points}
