@@ -10,10 +10,13 @@ service cloud.firestore {
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Collezione Utenti (Lettura pubblica a se stessi per il ruolo, scrittura se stessi per registrazione)
+    // Collezione Utenti (Lettura pubblica a se stessi per il ruolo)
+    // Creazione: Solo se il ruolo che si sta creando è 'guest' o 'player' (nessuno può crearsi come 'admin')
+    // Aggiornamento: L'utente può aggiornare il suo profilo, ma non può cambiare il suo ruolo (deve rimanere uguale a quello precedente, o l'admin deve cambiarlo)
     match /users/{userId} {
       allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId && (request.resource.data.role == 'player' || request.resource.data.role == 'guest');
+      allow update: if request.auth != null && request.auth.uid == userId && request.resource.data.role == resource.data.role;
     }
 
     // Tornei e sottomodelli (Gruppi, Partite)

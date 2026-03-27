@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTournamentStore } from '../store/useTournamentStore';
-import type { ScoringSystem, Group, TieBreaker, PhaseConfig, PhaseType, MatchFormat } from '../store/useTournamentStore';
+import type { ScoringSystem, Group, Team, TieBreaker, PhaseConfig, PhaseType, MatchFormat } from '../store/useTournamentStore';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, KeyRound, Save, Trophy, Settings2 } from 'lucide-react';
+import { Plus, Trash2, KeyRound, Save, Trophy, Settings2, Shuffle } from 'lucide-react';
+import { generateRandomGroups } from '../utils/tournamentLogic';
 
 export default function CreateTournament() {
   const createTournament = useTournamentStore((state) => state.createTournament);
@@ -27,6 +28,20 @@ export default function CreateTournament() {
     { id: '1', name: 'Girone A', teams: [] }
   ]);
   const [generateApi, setGenerateApi] = useState(true);
+
+  // Auto-generation tools
+  const [numRandomGroups, setNumRandomGroups] = useState<number>(2);
+
+  const handleGenerateRandomGroups = () => {
+    // Raccoglie tutte le squadre attuali
+    const allTeams = groups.reduce((acc, g) => [...acc, ...g.teams], [] as Team[]);
+    if (allTeams.length === 0) {
+      alert('Aggiungi almeno una squadra prima di generare i gironi!');
+      return;
+    }
+    const newGroups = generateRandomGroups(allTeams, numRandomGroups);
+    setGroups(newGroups);
+  };
 
   if (!isAdmin) {
     return (
@@ -287,16 +302,42 @@ export default function CreateTournament() {
         </section>
 
         {/* Composizione Gironi e Squadre */}
-        <section className="flex flex-col gap-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-white">Composizione Gironi e Squadre</h2>
-            <button
-              type="button"
-              onClick={addGroup}
-              className="btn-secondary flex items-center gap-2 py-1.5 px-3 text-sm"
-            >
-              <Plus className="w-4 h-4" /> Aggiungi Girone
-            </button>
+        <section className="flex flex-col gap-6 glass-panel p-6 border-t-[3px] border-t-neon-blue">
+          <div className="flex flex-col gap-4 mb-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold text-white">Composizione Gironi e Squadre</h2>
+              <button
+                type="button"
+                onClick={addGroup}
+                className="btn-secondary flex items-center gap-2 py-1.5 px-3 text-sm"
+              >
+                <Plus className="w-4 h-4" /> Aggiungi Girone Manualmente
+              </button>
+            </div>
+
+            {/* Strumento di generazione automatica gironi */}
+            <div className="flex flex-wrap items-end gap-4 bg-[rgba(0,0,0,0.3)] p-4 rounded-lg border border-[rgba(255,255,255,0.05)]">
+               <div className="flex flex-col gap-2">
+                 <label className="text-sm font-medium text-gray-300">Numero di Gironi Desiderato</label>
+                 <input
+                   type="number"
+                   min="1"
+                   value={numRandomGroups}
+                   onChange={(e) => setNumRandomGroups(parseInt(e.target.value) || 1)}
+                   className="input-glass w-32"
+                 />
+               </div>
+               <button
+                  type="button"
+                  onClick={handleGenerateRandomGroups}
+                  className="btn-primary flex items-center gap-2 py-2 px-4 text-sm bg-neon-blue text-[#0b0c10] hover:bg-transparent hover:text-neon-blue border border-transparent hover:border-neon-blue transition-all"
+               >
+                 <Shuffle className="w-4 h-4" /> Genera Gironi Random
+               </button>
+               <p className="text-xs text-gray-400 w-full mt-1">
+                 Aggiungi prima le squadre nei gironi sottostanti, poi usa questo strumento per mescolarle e distribuirle equamente.
+               </p>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
