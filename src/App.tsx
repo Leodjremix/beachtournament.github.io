@@ -9,6 +9,7 @@ import Home from './pages/Home';
 import CreateTournament from './pages/CreateTournament';
 import TournamentView from './pages/TournamentView';
 import Login from './pages/Login';
+import PlayerDashboard from './pages/PlayerDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 
 import { useAuthStore } from './store/useAuthStore';
@@ -24,7 +25,7 @@ function App() {
         try {
           const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
           if (userDoc.exists()) {
-            setUser(currentUser, userDoc.data().role as 'admin' | 'guest');
+            setUser(currentUser, userDoc.data().role as 'admin' | 'guest' | 'player');
           } else {
             // Default to guest if no document exists
             setUser(currentUser, 'guest');
@@ -75,6 +76,13 @@ function App() {
               </Link>
             )}
 
+            {userRole === 'player' && (
+              <Link to="/dashboard" className="btn-secondary flex items-center gap-2 ml-2 bg-[rgba(0,243,255,0.1)] border-neon-blue text-neon-blue">
+                <LayoutDashboard className="w-4 h-4" />
+                <span className="hidden sm:inline">Area Giocatore</span>
+              </Link>
+            )}
+
             {user ? (
               <button onClick={handleLogout} className="ml-4 text-gray-400 hover:text-neon-orange flex items-center gap-1 transition-colors">
                 <LogOut className="w-4 h-4" />
@@ -83,7 +91,7 @@ function App() {
             ) : (
               <Link to="/login" className="ml-4 text-neon-blue hover:text-white flex items-center gap-1 transition-colors">
                 <LogIn className="w-4 h-4" />
-                <span className="text-sm hidden sm:inline">Login Admin</span>
+                <span className="text-sm hidden sm:inline">Login / Registrati</span>
               </Link>
             )}
           </div>
@@ -101,6 +109,11 @@ function App() {
               {/* Protected Routes (Admin Only) */}
               <Route element={<ProtectedRoute requiredRole="admin" />}>
                 <Route path="/create" element={<CreateTournament />} />
+              </Route>
+
+              {/* Protected Routes (Player Only) */}
+              <Route element={<ProtectedRoute requiredRole="player" />}>
+                <Route path="/dashboard" element={<PlayerDashboard />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/" replace />} />

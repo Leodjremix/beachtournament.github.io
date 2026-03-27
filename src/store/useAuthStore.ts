@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import type { User } from 'firebase/auth';
 
+export type UserRole = 'admin' | 'guest' | 'player';
+
 interface AuthState {
   user: User | null;
-  userRole: 'admin' | 'guest' | null;
-  setUser: (user: User | null, role?: 'admin' | 'guest') => void;
+  userRole: UserRole | null;
+  setUser: (user: User | null, role?: UserRole) => void;
   isLoading: boolean;
   setLoading: (loading: boolean) => void;
 }
