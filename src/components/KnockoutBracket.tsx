@@ -3,7 +3,7 @@ import type { Match, PhaseType, Tournament } from '../store/useTournamentStore';
 import LiveScore from './LiveScore';
 import { useTournamentStore } from '../store/useTournamentStore';
 
-export function KnockoutBracket({ tournament, isAdmin }: { tournament: Tournament, isAdmin: boolean }) {
+export function KnockoutBracket({ tournament, isAdmin, onScheduleUpdate }: { tournament: Tournament, isAdmin: boolean, onScheduleUpdate?: (matchId: string, scheduledTime: string) => Promise<void> }) {
   const bracketMatches = tournament.matches.filter(m => m.phaseType !== 'groups');
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const updateMatchScoreRealtime = useTournamentStore((state) => state.updateMatchScoreRealtime);
@@ -159,6 +159,7 @@ export function KnockoutBracket({ tournament, isAdmin }: { tournament: Tournamen
               team2Name={getTeamDisplay(selectedMatch.team2Id) as string}
               isAdmin={isAdmin}
               onUpdate={handleScoreUpdate}
+              onScheduleUpdate={onScheduleUpdate}
             />
           </div>
         </div>

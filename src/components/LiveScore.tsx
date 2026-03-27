@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Match } from '../store/useTournamentStore';
-import { Edit2, Save, X } from 'lucide-react';
+import { Edit2, Save, X, Clock, Calendar } from 'lucide-react';
 
 interface LiveScoreProps {
   match: Match;
@@ -9,14 +9,17 @@ interface LiveScoreProps {
   groupName?: string;
   isAdmin: boolean;
   onUpdate: (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean) => void;
+  onScheduleUpdate?: (matchId: string, scheduledTime: string) => void;
 }
 
-const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate }: LiveScoreProps) => {
+const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate, onScheduleUpdate }: LiveScoreProps) => {
   const [isEditing, setIsEditing] = useState(false);
   // Per semplicità nell'MVP gestiamo solo il primo set
   const [t1Scores, setT1Scores] = useState([...match.team1Score]);
   const [t2Scores, setT2Scores] = useState([...match.team2Score]);
   const [finished, setFinished] = useState(match.isFinished);
+  const [scheduledTime, setScheduledTime] = useState(match.scheduledTime || '');
+  const [isEditingSchedule, setIsEditingSchedule] = useState(false);
 
   const handleSave = () => {
     onUpdate(match.id, t1Scores, t2Scores, finished);
@@ -31,6 +34,13 @@ const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate }
   };
 
   const isLive = !match.isFinished && (match.team1Score.some(s => s > 0) || match.team2Score.some(s => s > 0));
+
+  const handleScheduleSave = () => {
+    if (onScheduleUpdate) {
+      onScheduleUpdate(match.id, scheduledTime);
+    }
+    setIsEditingSchedule(false);
+  };
 
   return (
     <div className={`glass-panel p-4 rounded-xl border-l-4 ${
@@ -49,12 +59,35 @@ const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate }
           {groupName && <span className="text-gray-400">{groupName}</span>}
         </div>
 
-        {isAdmin && !isEditing && (
-          <button onClick={() => setIsEditing(true)} className="text-gray-400 hover:text-white transition-colors">
-            <Edit2 className="w-4 h-4" />
-          </button>
-        )}
+        <div className="flex gap-2">
+          {isAdmin && !isEditing && (
+            <button onClick={() => setIsEditingSchedule(!isEditingSchedule)} className="text-gray-400 hover:text-neon-orange transition-colors" title="Imposta Orario">
+              <Clock className="w-4 h-4" />
+            </button>
+          )}
+          {isAdmin && !isEditing && (
+            <button onClick={() => setIsEditing(true)} className="text-gray-400 hover:text-white transition-colors" title="Aggiorna Punteggio">
+              <Edit2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
+
+      {isEditingSchedule && isAdmin && !isEditing && (
+        <div className="mb-4 bg-[#0b0c10]/50 p-3 rounded-lg border border-neon-orange/30 flex items-center gap-2 animate-fade-in">
+          <Calendar className="w-4 h-4 text-neon-orange" />
+          <input
+            type="text"
+            placeholder="es. Sabato 15:30 (Campo 1)"
+            value={scheduledTime}
+            onChange={(e) => setScheduledTime(e.target.value)}
+            className="flex-1 bg-transparent text-sm text-white focus:outline-none focus:border-b border-gray-600"
+          />
+          <button onClick={handleScheduleSave} className="p-1 text-green-400 hover:bg-green-400/10 rounded">
+            <Save className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {isEditing ? (
         <div className="space-y-4 animate-fade-in">
@@ -128,6 +161,12 @@ const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate }
               {match.team2Score.join(' - ')}
             </span>
           </div>
+
+          {!isEditing && match.scheduledTime && (
+            <div className="mt-3 pt-2 border-t border-[rgba(255,255,255,0.05)] text-xs text-neon-orange flex items-center justify-center gap-1">
+              <Clock className="w-3 h-3" /> {match.scheduledTime}
+            </div>
+          )}
         </div>
       )}
     </div>

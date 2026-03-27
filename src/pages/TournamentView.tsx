@@ -13,7 +13,7 @@ const TournamentView = () => {
   const [activeTab, setActiveTab] = useState<'standings' | 'matches' | 'bracket'>('standings');
   const [copied, setCopied] = useState(false);
 
-  const { currentTournament, updateMatchScoreRealtime, generateKnockoutBracket, archiveTournament, subscribeToTournament } = useTournamentStore();
+  const { currentTournament, updateMatchScoreRealtime, updateMatchSchedule, generateKnockoutBracket, archiveTournament, subscribeToTournament } = useTournamentStore();
   const { userRole } = useAuthStore();
   const isAdmin = userRole === 'admin';
 
@@ -41,6 +41,16 @@ const TournamentView = () => {
         team1Score,
         team2Score,
         isFinished,
+        currentTournament.id,
+        currentTournament.apiKey
+    );
+  };
+
+  const handleScheduleUpdate = async (matchId: string, scheduledTime: string) => {
+    if(!isAdmin) return;
+    await updateMatchSchedule(
+        matchId,
+        scheduledTime,
         currentTournament.id,
         currentTournament.apiKey
     );
@@ -145,6 +155,7 @@ const TournamentView = () => {
                     groupName={group?.name}
                     isAdmin={isAdmin}
                     onUpdate={(mId, s1, s2, isFinished) => handleScoreUpdate(mId, s1, s2, isFinished, group?.id)}
+                    onScheduleUpdate={handleScheduleUpdate}
                   />
                 );
               })}
@@ -176,7 +187,7 @@ const TournamentView = () => {
               </div>
             </div>
 
-            <KnockoutBracket tournament={currentTournament} isAdmin={isAdmin && !currentTournament.isArchived} />
+            <KnockoutBracket tournament={currentTournament} isAdmin={isAdmin && !currentTournament.isArchived} onScheduleUpdate={handleScheduleUpdate} />
           </div>
         )}
       </div>

@@ -35,6 +35,7 @@ export type Match = {
   nextMatchSlot?: 'team1' | 'team2'; // Indica se il vincitore va nello slot 1 o 2 del prossimo match
   isHomeAndAway?: boolean;
   legIndex?: number; // 0 per andata, 1 per ritorno
+  scheduledTime?: string; // Timestamp o testo (es. "Sabato 15:30") assegnato dall'Admin
 };
 
 export type Group = {
@@ -67,6 +68,7 @@ interface TournamentState {
   setCurrentTournament: (tournament: Tournament | null) => void;
   createTournament: (name: string, scoring: ScoringSystem, playoffScoring: ScoringSystem, groups: Group[], qualifiersPerGroup: number, tieBreakers: TieBreaker[], knockoutPhases: PhaseConfig[]) => Promise<void>;
   updateMatchScoreRealtime: (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean, tournamentId: string, apiKey: string) => Promise<void>;
+  updateMatchSchedule: (matchId: string, scheduledTime: string, tournamentId: string, apiKey: string) => Promise<void>;
   tournamentsList: Tournament[];
   generateKnockoutBracket: (tournamentId: string) => Promise<void>;
   archiveTournament: (tournamentId: string) => Promise<void>;
@@ -218,6 +220,25 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
 
     await batch.commit();
     set({ currentTournament: newTournament });
+  },
+
+  updateMatchSchedule: async (matchId, scheduledTime, tournamentId, apiKey) => {
+    const batch = writeBatch(db);
+
+    // Aggiorna la partita (Match)
+    const matchRef = doc(db, `tournaments/${tournamentId}/matches`, matchId);
+    batch.update(matchRef, { scheduledTime });
+
+    // Aggiorna anche il documento pubblico (con i dati live grezzi)
+    const publicRef = doc(db, 'public_tournaments', apiKey);
+    const publicDoc = await getDoc(publicRef);
+    if(publicDoc.exists()) {
+        const pubData = publicDoc.data();
+        const pubMatches = pubData.matches.map((m: Match) => m.id === matchId ? { ...m, scheduledTime } : m);
+        batch.update(publicRef, { matches: pubMatches });
+    }
+
+    await batch.commit();
   },
 
   updateMatchScoreRealtime: async (matchId, team1Score, team2Score, isFinished, tournamentId, apiKey) => {
