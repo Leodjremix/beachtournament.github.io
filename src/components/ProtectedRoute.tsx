@@ -1,15 +1,15 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
-import type { UserRole } from '../store/useAuthStore';
+type Role = 'admin' | 'player' | 'guest';
 
 interface ProtectedRouteProps {
-  requiredRole?: UserRole;
+  requiredRole?: Role;
 }
 
 const ProtectedRoute = ({ requiredRole }: ProtectedRouteProps) => {
-  const { user, userRole, isLoading } = useAuthStore();
+  const { user, userRole, loading } = useAuthStore();
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-screen bg-[#0b0c10]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neon-blue"></div>

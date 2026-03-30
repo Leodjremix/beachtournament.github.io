@@ -1,92 +1,106 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTournamentStore } from '../store/useTournamentStore';
-import { useNavigate, Link } from 'react-router-dom';
-import { Calendar, PlayCircle, Settings, Users, Trophy } from 'lucide-react';
+import { Trophy, Clock, Trash2, Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-export default function Home() {
-  const fetchTournaments = useTournamentStore((state) => state.fetchTournaments);
-  const tournamentsList = useTournamentStore((state) => state.tournamentsList);
-
+const Home = () => {
   const navigate = useNavigate();
-  const isAdmin = useAuthStore(state => state.userRole === 'admin');
+  const { user, userRole } = useAuthStore();
+  const { tournamentsList, fetchTournaments, deleteTournament } = useTournamentStore();
 
   useEffect(() => {
     fetchTournaments();
   }, [fetchTournaments]);
 
+  if (!user) return <div className="text-white text-center mt-10">Accesso Negato</div>;
+
+  const isAdmin = userRole === 'admin';
   const activeTournaments = tournamentsList.filter(t => !t.isArchived);
   const archivedTournaments = tournamentsList.filter(t => t.isArchived);
 
   return (
-    <div className="flex flex-col gap-8 w-full animate-fade-in">
-      <div className="flex justify-between items-center bg-[rgba(255,255,255,0.02)] p-4 rounded-xl border border-[rgba(255,255,255,0.05)]">
-        <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-md">
-          Dashboard <span className="text-neon-blue">Tornei</span>
-        </h1>
+    <div className="max-w-6xl mx-auto flex flex-col gap-8 animate-fade-in p-4">
+      <section className="glass-panel p-8 flex flex-col md:flex-row justify-between items-center gap-6 border-l-[4px] border-l-neon-blue relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-neon-blue opacity-5 blur-[100px] rounded-full pointer-events-none"></div>
+        <div className="z-10">
+          <h1 className="text-3xl font-bold text-white mb-1">Dashboard Tornei</h1>
+          <span className="px-3 py-1 bg-[rgba(0,243,255,0.1)] text-neon-blue rounded-full text-xs font-medium border border-[rgba(0,243,255,0.2)]">
+            {isAdmin ? 'Amministratore' : 'Utente / Giocatore'}
+          </span>
+        </div>
         {isAdmin && (
-            <button
-            onClick={() => navigate('/create')}
-            className="btn-primary px-4 py-2 flex items-center gap-2"
-            >
-            <PlayCircle className="w-4 h-4" /> Crea Torneo
+            <button onClick={() => navigate('/create')} className="z-10 btn-primary flex items-center gap-2">
+                <Plus className="w-5 h-5" /> Nuovo Torneo
             </button>
         )}
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {activeTournaments.length > 0 ? (
-          activeTournaments.map(tournament => (
-            <div key={tournament.id} className="glass-panel p-6 col-span-1 md:col-span-2 lg:col-span-3 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between border-neon-blue transition-all duration-300 hover:shadow-[0_0_20px_rgba(0,243,255,0.3)]">
-                <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-3">
-                    <span className="px-3 py-1 bg-neon-blue text-[#0b0c10] text-xs font-bold rounded-full">IN CORSO</span>
-                    <h2 className="text-2xl font-bold text-white">{tournament.name}</h2>
-                </div>
-                <div className="flex gap-4 mt-2 text-sm text-gray-300">
-                    <div className="flex items-center gap-1"><Users className="w-4 h-4 text-neon-orange" /> {tournament.groups.reduce((acc, g) => acc + g.teams.length, 0)} Squadre</div>
-                    <div className="flex items-center gap-1"><Settings className="w-4 h-4 text-neon-blue" /> {tournament.scoringSystem === 'single_set' ? 'Set Unico (21)' : 'Best of 3'}</div>
-                </div>
-                </div>
+      <div className="flex flex-col gap-6">
+        <div className="glass-panel p-6 border-t-[3px] border-t-neon-blue">
+          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-neon-blue" />
+            Tornei Attivi
+          </h2>
 
-                <Link
-                to={`/tournament/${tournament.id}`}
-                className="btn-primary flex items-center gap-2 w-full md:w-auto justify-center py-3 px-6 text-lg shadow-[0_0_15px_rgba(0,243,255,0.4)]"
-                >
-                <PlayCircle className="w-5 h-5" />
-                Gestisci / Visualizza
-                </Link>
-            </div>
-          ))
-        ) : (
-          <div className="glass-panel p-10 col-span-1 md:col-span-2 lg:col-span-3 flex flex-col items-center justify-center text-center gap-4 border-dashed border-[rgba(255,255,255,0.2)]">
-            <Calendar className="w-16 h-16 text-gray-500 mb-2" />
-            <h2 className="text-xl text-gray-300 font-medium">Nessun torneo in corso</h2>
-            {isAdmin && (
-              <button
-                onClick={() => navigate('/create')}
-                className="btn-primary mt-4 text-lg px-8 py-3"
-              >
-                Crea Nuovo Torneo
-              </button>
-            )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activeTournaments.map(t => (
+              <div key={t.id} className="bg-[#0b0c10]/80 p-4 rounded-xl border border-neon-blue/20 relative hover:bg-[#1f2833] transition-colors cursor-pointer" onClick={() => navigate(`/tournament/${t.id}`)}>
+                <h3 className="text-lg font-bold text-white mb-2">{t.name}</h3>
+                <div className="text-xs text-gray-400 mb-4 flex flex-col gap-1">
+                  <span>Gironi: {t.groupStageMode === 'single_set' ? 'Set Unico' : 'Best of 3'}</span>
+                  <span>Squadre Qualificate per girone: {t.qualificationRules?.qualifiersPerGroup}</span>
+                </div>
+                {isAdmin && (
+                  <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if(window.confirm(`Sei sicuro di voler eliminare definitivamente il torneo ${t.name}?`)) {
+                            deleteTournament(t.id, t.apiKey);
+                        }
+                    }}
+                    className="absolute top-4 right-4 text-gray-500 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+            {activeTournaments.length === 0 && <p className="text-sm text-gray-500">Nessun torneo attivo.</p>}
           </div>
-        )}
+        </div>
 
-        {/* Archived tournaments */}
-        {archivedTournaments.map(tournament => (
-            <div key={tournament.id} className="glass-panel p-6 flex flex-col gap-4 opacity-70 hover:opacity-100 transition-opacity">
-                <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.1)] pb-3">
-                    <h3 className="font-bold text-white">{tournament.name}</h3>
-                    <span className="text-xs px-2 py-1 bg-[rgba(255,255,255,0.1)] rounded text-gray-300">Concluso</span>
-                </div>
-                <div className="text-sm text-gray-400">
-                    <p className="flex items-center gap-2"><Trophy className="w-4 h-4 text-neon-orange" /> {tournament.groups.reduce((acc, g) => acc + g.teams.length, 0)} Squadre • {tournament.groups.length} Gironi</p>
-                </div>
-                <Link to={`/tournament/${tournament.id}`} className="text-neon-blue text-sm text-left hover:underline mt-2">Vedi Storico</Link>
-            </div>
-        ))}
+        <div className="glass-panel p-6 border-t-[3px] border-t-neon-orange">
+          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Clock className="w-5 h-5 text-neon-orange" />
+            Storico Tornei (Archiviati)
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {archivedTournaments.map(t => (
+              <div key={t.id} className="bg-[#0b0c10]/80 p-4 rounded-xl border border-neon-orange/20 relative opacity-70 hover:opacity-100 transition-opacity cursor-pointer" onClick={() => navigate(`/tournament/${t.id}`)}>
+                <h3 className="text-lg font-bold text-white mb-2">{t.name}</h3>
+                {isAdmin && (
+                  <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if(window.confirm(`Eliminare definitivamente dall'archivio?`)) {
+                            deleteTournament(t.id, t.apiKey);
+                        }
+                    }}
+                    className="absolute top-4 right-4 text-gray-500 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+            {archivedTournaments.length === 0 && <p className="text-sm text-gray-500">Nessun torneo in archivio.</p>}
+          </div>
+        </div>
       </div>
     </div>
   );
-}
+};
+
+export default Home;

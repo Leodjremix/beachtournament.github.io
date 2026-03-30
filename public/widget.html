@@ -3,242 +3,237 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Widget Beach Volley</title>
-    <!-- Stile minimalista scuro in linea con il Glassmorphism base -->
+    <title>Beach Volley Live Widget</title>
     <style>
-        .bv-widget-container {
+        /* Base Glassmorphism Theme for Widget */
+        body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #0b0c10;
-            color: #c5c6c7;
-            padding: 20px;
+            background-color: transparent; /* Da integrare in siti scuri preferibilmente */
+            color: #fff;
+            margin: 0;
+            padding: 1rem;
+        }
+        .widget-container {
+            background: rgba(11, 12, 16, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 243, 255, 0.2);
             border-radius: 12px;
-            border: 1px solid rgba(102, 252, 241, 0.2);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+            padding: 20px;
             max-width: 600px;
             margin: 0 auto;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
         }
-        .bv-title {
-            color: #fff;
-            font-size: 1.5rem;
+        h2 {
+            color: #00f3ff;
             margin-top: 0;
-            margin-bottom: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+            text-align: center;
+            border-bottom: 2px solid rgba(0, 243, 255, 0.3);
+            padding-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
         }
-        .bv-live-badge {
-            background-color: #ff652f;
-            color: #0b0c10;
-            font-size: 0.75rem;
+        h3 {
+            color: #ff6b00;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+        .match-card {
+            background: rgba(31, 40, 51, 0.6);
+            border-left: 4px solid #00f3ff;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+        }
+        .match-card.finished {
+            border-left-color: #4CAF50;
+            opacity: 0.8;
+        }
+        .team-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 6px 0;
             font-weight: bold;
-            padding: 3px 8px;
-            border-radius: 4px;
+        }
+        .score {
+            color: #ff6b00;
+            font-family: monospace;
+            font-size: 1.2rem;
+        }
+        .meta {
+            font-size: 0.75rem;
+            color: #aaa;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
             text-transform: uppercase;
         }
-        .bv-subtitle {
-            color: #66fcf1;
+
+        /* Table Styles for Standings */
+        .standings-table {
+            width: 100%;
+            border-collapse: collapse;
             font-size: 0.9rem;
             margin-bottom: 20px;
         }
-        .bv-match {
-            background-color: rgba(255, 255, 255, 0.05);
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-left: 3px solid #66fcf1;
-        }
-        .bv-match.finished {
-            border-left-color: #c5c6c7;
-            opacity: 0.7;
-        }
-        .bv-team {
-            flex: 1;
-            font-weight: 600;
-        }
-        .bv-team.team2 {
-            text-align: right;
-        }
-        .bv-score {
-            font-family: monospace;
-            font-size: 1.25rem;
-            font-weight: bold;
-            color: #fff;
-            padding: 0 15px;
-        }
-        .bv-time {
-            font-size: 0.75rem;
-            color: #ff652f;
-            text-align: center;
-            width: 100%;
-            margin-top: 5px;
-        }
-        .bv-standings {
-            margin-top: 20px;
-            border-collapse: collapse;
-            width: 100%;
-        }
-        .bv-standings th, .bv-standings td {
+        .standings-table th {
             text-align: left;
             padding: 8px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0,0,0,0.4);
+            color: #00f3ff;
         }
-        .bv-standings th {
-            color: #66fcf1;
-            font-size: 0.8rem;
-            text-transform: uppercase;
+        .standings-table td {
+            padding: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
         }
-        .bv-standings td {
-            font-size: 0.9rem;
+        .standings-table tr:hover {
+            background: rgba(255,255,255,0.05);
+        }
+        .pts { color: #00f3ff; font-weight: bold; }
+
+        .loading {
+            text-align: center;
+            color: #00f3ff;
+            padding: 20px;
         }
     </style>
 </head>
 <body>
 
-    <!-- CONTAINER WIDGET -->
-    <div id="beach-volley-widget" class="bv-widget-container">
-        <h2 class="bv-title">
-            <span id="bv-tour-name">Caricamento Torneo...</span>
-            <span class="bv-live-badge">Live</span>
-        </h2>
-        <div id="bv-tour-status" class="bv-subtitle">In attesa dei dati da Firebase...</div>
-
-        <h3>Ultime Partite</h3>
-        <div id="bv-matches-container">
-            <!-- Partite iniettate via JS -->
-        </div>
-
-        <h3 style="margin-top: 20px;">Classifiche Gironi</h3>
-        <div id="bv-standings-container">
-             <!-- Classifiche iniettate via JS -->
-        </div>
+    <div class="widget-container" id="bv-widget">
+        <div class="loading">Caricamento dati in tempo reale...</div>
     </div>
 
-    <!-- SCRIPT FIREBASE COMPAT (Modulo ES) -->
+    <!-- Firebase SDK (Sola lettura / CDN) -->
     <script type="module">
-        // Importa Firebase SDK via CDN per l'uso standalone nei browser
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-        // Configurazione - ISTRUZIONI PER L'UTENTE FINALE:
-        // 1. Sostituisci i dati con la config del tuo progetto Firebase
-        // 2. Inserisci la API_KEY generata nella Dashboard Admin
+        // === CONFIGURAZIONE WEBMASTER ===
+        // Sostituisci questo valore con la "API Serverless Key" generata dalla Dashboard Admin
+        const API_KEY = "INSERISCI_QUI_LA_TUA_API_KEY_DEL_TORNEO";
+
+        // Configurazione Firebase base (Prendi questa dal file src/lib/firebase.ts o Firebase Console)
+        // Solo i campi projectId e databaseURL sono strettamente necessari per le letture anonime
         const firebaseConfig = {
-            apiKey: "TUA_FIREBASE_API_KEY",
-            authDomain: "TUA_APP.firebaseapp.com",
-            projectId: "TUA_APP",
+            projectId: "beach-volley-tournaments",
         };
-        const TOURNAMENT_API_KEY = "CHIAVE_GENERATA_DALL_ADMIN_UI";
 
-        // Inizializza Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        const tourNameEl = document.getElementById('bv-tour-name');
-        const tourStatusEl = document.getElementById('bv-tour-status');
-        const matchesContainer = document.getElementById('bv-matches-container');
-        const standingsContainer = document.getElementById('bv-standings-container');
+        const widgetDiv = document.getElementById('bv-widget');
 
-        // Ascolta le modifiche in tempo reale sulla collezione pubblica
-        const unsub = onSnapshot(doc(db, "public_tournaments", TOURNAMENT_API_KEY), (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                tourNameEl.textContent = data.name;
-                tourStatusEl.textContent = data.isArchived ? "Archiviato" : "In corso";
+        if (API_KEY === "INSERISCI_QUI_LA_TUA_API_KEY_DEL_TORNEO") {
+            widgetDiv.innerHTML = '<div style="color: #ff6b00; text-align:center; padding: 20px;">Errore: Devi inserire la API KEY nel file widget.html</div>';
+            throw new Error("Missing API Key");
+        }
 
-                // Renderizza Partite (mostriamo le ultime 5 o live)
-                matchesContainer.innerHTML = '';
-                if(data.matches && data.matches.length > 0) {
-                    // Ordina mettendo prima quelle non finite, poi per id/time
-                    const sortedMatches = [...data.matches].sort((a, b) => (a.isFinished === b.isFinished) ? 0 : a.isFinished ? 1 : -1).slice(0, 5);
+        // Ascolto in tempo reale sul documento pubblico
+        const docRef = doc(db, 'public_tournaments', API_KEY);
 
-                    sortedMatches.forEach(match => {
-                        let t1Name = "TBD";
-                        let t2Name = "TBD";
-                        let groupName = "";
-
-                        // Trova nomi dei team
-                        if(match.groupId) {
-                            const group = data.groups.find(g => g.id === match.groupId);
-                            if(group) {
-                                groupName = `(${group.name}) `;
-                                const t1 = group.teams.find(t => t.id === match.team1Id);
-                                const t2 = group.teams.find(t => t.id === match.team2Id);
-                                if(t1) t1Name = t1.name;
-                                if(t2) t2Name = t2.name;
-                            }
-                        } else {
-                            // Fase Finale - da implementare mappatura avanzata
-                            groupName = `(${match.phaseType}) `;
-                        }
-
-                        if(match.team1Id === 'dummy_bye' || match.team2Id === 'dummy_bye') return; // Salta i bye
-                        if(match.team1Id === 'dummy' || match.team2Id === 'dummy') return;
-
-                        const matchEl = document.createElement('div');
-                        matchEl.className = `bv-match ${match.isFinished ? 'finished' : ''}`;
-                        matchEl.innerHTML = `
-                            <div style="width: 100%; display: flex; flex-direction: column;">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div class="bv-team">${t1Name}</div>
-                                    <div class="bv-score">${match.team1Score[0] || 0} - ${match.team2Score[0] || 0}</div>
-                                    <div class="bv-team team2">${t2Name}</div>
-                                </div>
-                                ${match.scheduledTime ? `<div class="bv-time">${groupName} ${match.scheduledTime}</div>` : `<div class="bv-time">${groupName}</div>`}
-                            </div>
-                        `;
-                        matchesContainer.appendChild(matchEl);
-                    });
-                } else {
-                    matchesContainer.innerHTML = '<p style="font-size:0.9rem;">Nessuna partita al momento.</p>';
-                }
-
-                // Renderizza Classifiche
-                standingsContainer.innerHTML = '';
-                if(data.groups && data.groups.length > 0) {
-                    data.groups.forEach(group => {
-                        const table = document.createElement('table');
-                        table.className = 'bv-standings';
-
-                        // Header
-                        table.innerHTML = `
-                            <thead>
-                                <tr>
-                                    <th>${group.name}</th>
-                                    <th>Pt</th>
-                                    <th>W-L</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            </tbody>
-                        `;
-
-                        const tbody = table.querySelector('tbody');
-
-                        // Ordina i team (già ordinati dal backend idealmente, ma riordiniamo per punti)
-                        const sortedTeams = [...group.teams].sort((a,b) => b.points - a.points);
-
-                        sortedTeams.forEach(team => {
-                            if(team.id === 'dummy') return;
-                            const tr = document.createElement('tr');
-                            tr.innerHTML = `
-                                <td>${team.name}</td>
-                                <td><strong>${team.points}</strong></td>
-                                <td>${team.setsWon}-${team.setsLost}</td>
-                            `;
-                            tbody.appendChild(tr);
-                        });
-
-                        standingsContainer.appendChild(table);
-                    });
-                }
-
-            } else {
-                tourStatusEl.textContent = "Errore: Torneo non trovato. Verifica la API KEY.";
+        onSnapshot(docRef, (docSnap) => {
+            if (!docSnap.exists()) {
+                widgetDiv.innerHTML = '<div style="color: #ff6b00; text-align:center;">Torneo non trovato o API Key errata.</div>';
+                return;
             }
+
+            const data = docSnap.data();
+            renderWidget(data);
+        }, (error) => {
+            console.error("Errore di connessione a Firebase:", error);
+            widgetDiv.innerHTML = '<div style="color: red; text-align:center;">Errore di connessione ai dati live.</div>';
         });
+
+        function renderWidget(data) {
+            let html = `<h2>${data.name}</h2>`;
+
+            // 1. Partite Live (In corso o appena programmate)
+            const liveMatches = data.matches ? data.matches.filter(m => !m.isFinished) : [];
+
+            if (liveMatches.length > 0) {
+                html += `<h3>Partite Live / Prossime</h3>`;
+                liveMatches.forEach(match => {
+                    const t1Name = getTeamName(data.groups, match.team1Id);
+                    const t2Name = getTeamName(data.groups, match.team2Id);
+
+                    html += `
+                    <div class="match-card">
+                        <div class="meta">
+                            <span>${match.phaseType.replace('_', ' ')}</span>
+                            <span>${match.scheduledTime ? '⏰ ' + match.scheduledTime : 'Live'}</span>
+                        </div>
+                        <div class="team-row">
+                            <span>${t1Name}</span>
+                            <span class="score">${match.team1Score.join(' - ')}</span>
+                        </div>
+                        <div class="team-row">
+                            <span>${t2Name}</span>
+                            <span class="score">${match.team2Score.join(' - ')}</span>
+                        </div>
+                    </div>`;
+                });
+            }
+
+            // 2. Ultimi Risultati (Ultime 3 finite)
+            const finishedMatches = data.matches ? data.matches.filter(m => m.isFinished).slice(-3) : [];
+            if (finishedMatches.length > 0) {
+                 html += `<h3>Ultimi Risultati</h3>`;
+                 finishedMatches.forEach(match => {
+                    const t1Name = getTeamName(data.groups, match.team1Id);
+                    const t2Name = getTeamName(data.groups, match.team2Id);
+                    html += `
+                    <div class="match-card finished">
+                        <div class="meta"><span>${match.phaseType.replace('_', ' ')}</span> <span>FINITA</span></div>
+                        <div class="team-row"><span>${t1Name}</span> <span class="score">${match.team1Score.join(' - ')}</span></div>
+                        <div class="team-row"><span>${t2Name}</span> <span class="score">${match.team2Score.join(' - ')}</span></div>
+                    </div>`;
+                 });
+            }
+
+            // 3. Classifiche Gironi
+            if (data.groups && data.groups.length > 0) {
+                html += `<h3>Classifiche Gironi</h3>`;
+                data.groups.forEach(group => {
+                    html += `<h4>${group.name}</h4>`;
+                    html += `
+                    <table class="standings-table">
+                        <thead>
+                            <tr>
+                                <th>Squadra</th>
+                                <th>Pt</th>
+                                <th>Set</th>
+                                <th>Diff</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                    `;
+                    group.teams.forEach(team => {
+                        const diff = team.totalPointsScored - team.totalPointsConceded;
+                        html += `
+                        <tr>
+                            <td>${team.name}</td>
+                            <td class="pts">${team.points}</td>
+                            <td>${team.setsWon}-${team.setsLost}</td>
+                            <td>${diff > 0 ? '+'+diff : diff}</td>
+                        </tr>`;
+                    });
+                    html += `</tbody></table>`;
+                });
+            }
+
+            widgetDiv.innerHTML = html;
+        }
+
+        function getTeamName(groups, teamId) {
+            if (!teamId) return 'TBD';
+            if (groups) {
+                for (const group of groups) {
+                    const team = group.teams.find(t => t.id === teamId);
+                    if (team) return team.name;
+                }
+            }
+            return 'TBD';
+        }
     </script>
 </body>
 </html>

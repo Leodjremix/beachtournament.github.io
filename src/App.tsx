@@ -1,9 +1,8 @@
 import { useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { Volleyball, Trophy, Plus, LayoutDashboard, LogOut, LogIn } from 'lucide-react';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth, db } from './lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
+import { auth } from './lib/firebase';
 
 import Home from './pages/Home';
 import CreateTournament from './pages/CreateTournament';
@@ -15,33 +14,11 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { useAuthStore } from './store/useAuthStore';
 
 function App() {
-  const { user, userRole, setUser, setLoading } = useAuthStore();
+  const { user, userRole, initAuthListener } = useAuthStore();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setLoading(true);
-      if (currentUser) {
-        // Fetch user role from Firestore
-        try {
-          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-          if (userDoc.exists()) {
-            setUser(currentUser, userDoc.data().role as 'admin' | 'guest' | 'player');
-          } else {
-            // Default to guest if no document exists
-            setUser(currentUser, 'guest');
-          }
-        } catch (error) {
-          console.error("Error fetching user role:", error);
-          setUser(currentUser, 'guest');
-        }
-      } else {
-        setUser(null, undefined);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [setUser, setLoading]);
+    initAuthListener();
+  }, [initAuthListener]);
 
   const handleLogout = async () => {
     try {

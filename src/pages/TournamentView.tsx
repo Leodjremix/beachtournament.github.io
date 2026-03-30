@@ -2,30 +2,27 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTournamentStore } from '../store/useTournamentStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { ArrowLeft, Copy, Check, Lock, Trophy, Play } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Trophy, Play, PartyPopper } from 'lucide-react';
 import GroupStandings from '../components/GroupStandings';
 import LiveScore from '../components/LiveScore';
 import { KnockoutBracket } from '../components/KnockoutBracket';
-import { PartyPopper } from 'lucide-react';
 
 const TournamentView = () => {
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState<'standings' | 'matches' | 'bracket'>('standings');
   const [copied, setCopied] = useState(false);
 
-  const { currentTournament, updateMatchScoreRealtime, updateMatchSchedule, generateKnockoutBracket, archiveTournament, subscribeToTournament } = useTournamentStore();
+  const { currentTournament, updateMatchScoreRealtime, updateMatchSchedule, subscribeToTournament, generateKnockoutBracket, archiveTournament } = useTournamentStore();
   const { userRole } = useAuthStore();
   const isAdmin = userRole === 'admin';
 
   useEffect(() => {
     if (!id) return;
     const unsubscribe = subscribeToTournament(id);
-    return () => {
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, [id, subscribeToTournament]);
 
-  if (!currentTournament) return <div className="text-white">Caricamento in corso o torneo non trovato...</div>;
+  if (!currentTournament) return <div className="text-white text-center mt-10">Caricamento in corso o torneo non trovato...</div>;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(currentTournament.apiKey);
@@ -33,31 +30,18 @@ const TournamentView = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleScoreUpdate = async (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean, _groupId?: string) => {
-    if(!isAdmin) return; // Protezione client-side extra
-
-    await updateMatchScoreRealtime(
-        matchId,
-        team1Score,
-        team2Score,
-        isFinished,
-        currentTournament.id,
-        currentTournament.apiKey
-    );
+  const handleScoreUpdate = async (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean) => {
+    if(!isAdmin) return;
+    await updateMatchScoreRealtime(matchId, team1Score, team2Score, isFinished, currentTournament.id, currentTournament.apiKey);
   };
 
   const handleScheduleUpdate = async (matchId: string, scheduledTime: string) => {
     if(!isAdmin) return;
-    await updateMatchSchedule(
-        matchId,
-        scheduledTime,
-        currentTournament.id,
-        currentTournament.apiKey
-    );
+    await updateMatchSchedule(matchId, scheduledTime, currentTournament.id, currentTournament.apiKey);
   };
 
   return (
-    <div className="w-full max-w-6xl animate-fade-in pb-20">
+    <div className="w-full max-w-6xl mx-auto animate-fade-in pb-20 p-4">
       <Link to="/" className="inline-flex items-center text-neon-blue hover:text-white mb-6 transition-colors">
         <ArrowLeft className="w-4 h-4 mr-2" /> Torna alla Dashboard
       </Link>
@@ -72,25 +56,23 @@ const TournamentView = () => {
         </div>
       )}
 
-      <div className="glass-panel p-6 md:p-8 mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="glass-panel p-6 md:p-8 mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-l-[4px] border-l-neon-orange">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">{currentTournament.name}</h1>
           <div className="text-gray-400 text-sm flex gap-4">
-            <span>Gironi: {currentTournament.scoringSystem === 'single_set' ? 'Set Unico (21)' : 'Best of 3'}</span>
+            <span>Gironi: {currentTournament.groupStageMode === 'single_set' ? 'Set Unico' : 'Best of 3'}</span>
             <span>•</span>
-            <span>Fasi Finali: {currentTournament.playoffScoringSystem === 'single_set' ? 'Set Unico (21)' : 'Best of 3'}</span>
+            <span>Fasi Finali: {currentTournament.knockoutMode === 'single_set' ? 'Set Unico' : 'Best of 3'}</span>
           </div>
         </div>
 
         {isAdmin && (
           <div className="bg-[#0b0c10]/80 p-3 rounded-xl border border-neon-blue/30 flex flex-col gap-2 min-w-[200px]">
             <div className="text-xs text-neon-blue font-semibold uppercase tracking-wider flex items-center gap-1">
-              <Lock className="w-3 h-3" /> Serverless API Key
+              API Serverless Key
             </div>
             <div className="flex items-center justify-between bg-[#1f2833] rounded px-3 py-2 border border-gray-700">
-              <code className="text-neon-blue text-sm truncate mr-2">
-                {currentTournament.apiKey.substring(0, 8)}...
-              </code>
+              <code className="text-neon-blue text-sm truncate mr-2">{currentTournament.apiKey?.substring(0, 8)}...</code>
               <button onClick={handleCopy} className="text-gray-400 hover:text-white transition-colors" title="Copia Chiave">
                 {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
               </button>
@@ -137,7 +119,7 @@ const TournamentView = () => {
 
         {activeTab === 'matches' && (
           <div className="space-y-6">
-            <h2 className="text-xl font-bold text-white mb-4">Partite Gironi in Programma</h2>
+            <h2 className="text-xl font-bold text-white mb-4">Partite Gironi</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {currentTournament.matches.filter(m => m.phaseType === 'groups').map(match => {
                 const group = currentTournament.groups.find(g => g.id === match.groupId);
@@ -154,7 +136,7 @@ const TournamentView = () => {
                     team2Name={team2.name}
                     groupName={group?.name}
                     isAdmin={isAdmin}
-                    onUpdate={(mId, s1, s2, isFinished) => handleScoreUpdate(mId, s1, s2, isFinished, group?.id)}
+                    onUpdate={handleScoreUpdate}
                     onScheduleUpdate={handleScheduleUpdate}
                   />
                 );
