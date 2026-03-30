@@ -146,6 +146,8 @@
 
         function renderWidget(data) {
             let html = `<h2>${data.name}</h2>`;
+            const statusStr = data.status === 'archived' ? ' (Archiviato)' : (data.status === 'knockout_stage' ? ' - Fase Finale' : ' - Fase a Gironi');
+            html = `<h2>${data.name}<span style="font-size: 0.6em; color: #aaa;">${statusStr}</span></h2>`;
 
             // 1. Partite Live (In corso o appena programmate)
             const liveMatches = data.matches ? data.matches.filter(m => !m.isFinished) : [];
@@ -183,14 +185,64 @@
                     const t2Name = getTeamName(data.groups, match.team2Id);
                     html += `
                     <div class="match-card finished">
-                        <div class="meta"><span>${match.phaseType.replace('_', ' ')}</span> <span>FINITA</span></div>
+                        <div class="meta"><span>${match.phaseType.replace('_', ' ')}</span> <span>${match.scheduledTime ? '⏰ ' + match.scheduledTime + ' - ' : ''}FINITA</span></div>
                         <div class="team-row"><span>${t1Name}</span> <span class="score">${match.team1Score.join(' - ')}</span></div>
                         <div class="team-row"><span>${t2Name}</span> <span class="score">${match.team2Score.join(' - ')}</span></div>
                     </div>`;
                  });
             }
 
-            // 3. Classifiche Gironi
+            // 3. Renderizzazione Condizionale Tabellone Finale
+            if (data.status === 'knockout_stage' || data.status === 'archived') {
+                const bracketMatches = data.matches ? data.matches.filter(m => m.phaseType !== 'groups') : [];
+                if (bracketMatches.length > 0) {
+                    html += `<h3 style="color: #c5b4e3; border-bottom: 1px solid rgba(197,180,227,0.3); padding-bottom: 5px;">Tabellone Fasi Finali</h3>`;
+
+                    const phases = ['round_16', 'quarter_finals', 'semi_finals', 'finals', 'third_place'];
+                    phases.forEach(phase => {
+                        const phaseMatches = bracketMatches.filter(m => m.phaseType === phase);
+                        if (phaseMatches.length > 0) {
+                            html += `<h4>${phase === 'third_place' ? 'Finale 3°/4° Posto' : phase.replace('_', ' ').toUpperCase()}</h4>`;
+                            phaseMatches.forEach(match => {
+                                // Skip return match visualization as a separate block to avoid duplicates in simple list
+                                if (match.legIndex === 1) return;
+
+                                const t1Name = getTeamName(data.groups, match.team1Id);
+                                const t2Name = getTeamName(data.groups, match.team2Id);
+                                const returnMatch = bracketMatches.find(m => m.nextMatchId === match.id && m.legIndex === 1);
+
+                                html += `
+                                <div class="match-card ${match.isFinished ? 'finished' : ''}" style="border-left-color: #c5b4e3;">
+                                    <div class="meta">
+                                        <span>${match.scheduledTime ? '⏰ ' + match.scheduledTime : 'Da definire'}</span>
+                                        ${match.isFinished ? '<span>FINITA</span>' : ''}
+                                    </div>
+                                    ${returnMatch ? '<div style="font-size:0.7rem; color:#c5b4e3;">Andata</div>' : ''}
+                                    <div class="team-row"><span>${t1Name}</span> <span class="score">${match.team1Score.join(' - ')}</span></div>
+                                    <div class="team-row"><span>${t2Name}</span> <span class="score">${match.team2Score.join(' - ')}</span></div>
+                                `;
+
+                                if (returnMatch) {
+                                    html += `
+                                    <div style="border-top: 1px solid rgba(255,255,255,0.1); margin-top: 8px; padding-top: 8px;">
+                                        <div class="meta">
+                                            <span>${returnMatch.scheduledTime ? '⏰ ' + returnMatch.scheduledTime : 'Da definire'}</span>
+                                            ${returnMatch.isFinished ? '<span>FINITA</span>' : ''}
+                                        </div>
+                                        <div style="font-size:0.7rem; color:#ff6b00;">Ritorno</div>
+                                        <div class="team-row"><span>${getTeamName(data.groups, returnMatch.team1Id)}</span> <span class="score">${returnMatch.team1Score.join(' - ')}</span></div>
+                                        <div class="team-row"><span>${getTeamName(data.groups, returnMatch.team2Id)}</span> <span class="score">${returnMatch.team2Score.join(' - ')}</span></div>
+                                    </div>
+                                    `;
+                                }
+                                html += `</div>`;
+                            });
+                        }
+                    });
+                }
+            }
+
+            // 4. Classifiche Gironi
             if (data.groups && data.groups.length > 0) {
                 html += `<h3>Classifiche Gironi</h3>`;
                 data.groups.forEach(group => {

@@ -34,6 +34,7 @@ export interface Tournament {
   matches: Match[];
   apiKey: string;
   isArchived: boolean;
+  status?: 'group_stage' | 'knockout_stage' | 'archived';
 }
 
 export interface Team {
@@ -206,7 +207,8 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       groups,
       matches,
       apiKey,
-      isArchived: false
+      isArchived: false,
+      status: 'group_stage'
     };
 
     const batch = writeBatch(db);
@@ -223,6 +225,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       hasThirdPlaceMatch,
       apiKey,
       isArchived: false,
+      status: 'group_stage',
       groups: groups.map(g => ({ id: g.id, name: g.name, teams: g.teams }))
     });
 
@@ -590,11 +593,17 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       batch.set(doc(db, `tournaments/${tournamentId}/matches`, match.id), match);
     });
 
+    const tournamentRef = doc(db, 'tournaments', tournamentId);
+    batch.update(tournamentRef, { status: 'knockout_stage' });
+
     const publicRef = doc(db, 'public_tournaments', tournament.apiKey);
     const publicDoc = await getDoc(publicRef);
     if (publicDoc.exists()) {
         const pubData = publicDoc.data();
-        batch.update(publicRef, { matches: [...pubData.matches, ...bracketMatches] });
+        batch.update(publicRef, {
+            matches: [...pubData.matches, ...bracketMatches],
+            status: 'knockout_stage'
+        });
     }
 
     await batch.commit();
@@ -608,12 +617,12 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     const batch = writeBatch(db);
 
     const tournamentRef = doc(db, 'tournaments', tournamentId);
-    batch.update(tournamentRef, { isArchived: true });
+    batch.update(tournamentRef, { isArchived: true, status: 'archived' });
 
     const publicRef = doc(db, 'public_tournaments', tournament.apiKey);
     const publicDoc = await getDoc(publicRef);
     if(publicDoc.exists()) {
-        batch.update(publicRef, { isArchived: true });
+        batch.update(publicRef, { isArchived: true, status: 'archived' });
     }
 
     await batch.commit();
