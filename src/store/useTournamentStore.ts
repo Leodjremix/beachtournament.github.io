@@ -25,6 +25,8 @@ export interface Tournament {
   name: string;
   groupStageMode: ScoringMode;
   knockoutMode: ScoringMode;
+  isGroupStageHomeAway?: boolean;
+  isKnockoutHomeAway?: boolean;
   pointsPerSetWon: number;
   qualificationRules: QualificationRules;
   tieBreakers: TieBreaker[];
@@ -35,6 +37,7 @@ export interface Tournament {
   apiKey: string;
   isArchived: boolean;
   status?: 'group_stage' | 'knockout_stage' | 'archived';
+  hasKnockoutStarted?: boolean;
 }
 
 export interface Team {
@@ -56,12 +59,14 @@ export interface Match {
   team1Score: number[];
   team2Score: number[];
   isFinished: boolean;
+  status?: 'scheduled' | 'live' | 'finished';
   groupId?: string;
   nextMatchId?: string;
   nextMatchSlot?: 'team1' | 'team2';
   isHomeAndAway?: boolean;
   legIndex?: number;
-  scheduledTime?: string;
+  scheduledTime?: string; // Kept for backwards compatibility
+  scheduledAt?: string; // Native datetime-local string
 }
 
 export interface Group {
@@ -77,9 +82,9 @@ interface TournamentState {
   fetchTournaments: () => Promise<void>;
   deleteTournament: (tournamentId: string, apiKey: string) => Promise<void>;
   subscribeToTournament: (tournamentId: string) => () => void;
-  createTournament: (name: string, groupStageMode: ScoringMode, knockoutMode: ScoringMode, pointsPerSetWon: number, qualificationRules: QualificationRules, tieBreakers: TieBreaker[], hasThirdPlaceMatch: boolean, teamsList: Team[]) => Promise<void>;
-  updateMatchSchedule: (matchId: string, scheduledTime: string, tournamentId: string, apiKey: string) => Promise<void>;
-  updateMatchScoreRealtime: (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean, tournamentId: string, apiKey: string) => Promise<void>;
+  createTournament: (name: string, groupStageMode: ScoringMode, knockoutMode: ScoringMode, isGroupStageHomeAway: boolean, isKnockoutHomeAway: boolean, pointsPerSetWon: number, qualificationRules: QualificationRules, tieBreakers: TieBreaker[], hasThirdPlaceMatch: boolean, teamsList: Team[]) => Promise<void>;
+  updateMatchSchedule: (matchId: string, scheduledAt: string, tournamentId: string, apiKey: string) => Promise<void>;
+  updateMatchScoreRealtime: (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean, matchStatus: 'scheduled' | 'live' | 'finished', tournamentId: string, apiKey: string) => Promise<void>;
   generateKnockoutBracket: (tournamentId: string) => Promise<void>;
   archiveTournament: (tournamentId: string) => Promise<void>;
 }
@@ -132,7 +137,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
   },
 
   createTournament: async (
-    name, groupStageMode, knockoutMode, pointsPerSetWon,
+    name, groupStageMode, knockoutMode, isGroupStageHomeAway, isKnockoutHomeAway, pointsPerSetWon,
     qualificationRules, tieBreakers, hasThirdPlaceMatch, teamsList
   ) => {
     const tournamentId = Math.random().toString(36).substring(7);
@@ -178,17 +183,37 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
           const t2 = isHome ? groupTeams[numTeams - 1 - i] : groupTeams[i];
 
           if (t1.id !== 'dummy' && t2.id !== 'dummy') {
+            const matchId = Math.random().toString(36).substring(7);
             matches.push({
-              id: Math.random().toString(36).substring(7),
+              id: matchId,
               phaseType: 'groups',
               team1Id: t1.id,
               team2Id: t2.id,
               team1Score: [0],
               team2Score: [0],
               isFinished: false,
+              status: 'scheduled',
               groupId: group.id,
-              legIndex: round + 1
+              isHomeAndAway: isGroupStageHomeAway,
+              legIndex: 0
             });
+
+            if (isGroupStageHomeAway) {
+                matches.push({
+                    id: Math.random().toString(36).substring(7),
+                    phaseType: 'groups',
+                    team1Id: t2.id,
+                    team2Id: t1.id, // inverted for home/away
+                    team1Score: [0],
+                    team2Score: [0],
+                    isFinished: false,
+                    status: 'scheduled',
+                    groupId: group.id,
+                    isHomeAndAway: true,
+                    legIndex: 1,
+                    nextMatchId: matchId // links return leg to first leg
+                });
+            }
           }
         }
         groupTeams.splice(1, 0, groupTeams.pop()!);
@@ -200,6 +225,8 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       name,
       groupStageMode,
       knockoutMode,
+      isGroupStageHomeAway,
+      isKnockoutHomeAway,
       pointsPerSetWon,
       qualificationRules,
       tieBreakers,
@@ -208,7 +235,8 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       matches,
       apiKey,
       isArchived: false,
-      status: 'group_stage'
+      status: 'group_stage',
+      hasKnockoutStarted: false
     };
 
     const batch = writeBatch(db);
@@ -219,6 +247,8 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       name,
       groupStageMode,
       knockoutMode,
+      isGroupStageHomeAway,
+      isKnockoutHomeAway,
       pointsPerSetWon,
       qualificationRules,
       tieBreakers,
@@ -226,6 +256,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       apiKey,
       isArchived: false,
       status: 'group_stage',
+      hasKnockoutStarted: false,
       groups: groups.map(g => ({ id: g.id, name: g.name, teams: g.teams }))
     });
 
@@ -246,22 +277,22 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     set({ currentTournament: newTournament });
   },
 
-  updateMatchSchedule: async (matchId, scheduledTime, tournamentId, apiKey) => {
+  updateMatchSchedule: async (matchId, scheduledAt, tournamentId, apiKey) => {
     const batch = writeBatch(db);
     const matchRef = doc(db, `tournaments/${tournamentId}/matches`, matchId);
-    batch.update(matchRef, { scheduledTime });
+    batch.update(matchRef, { scheduledAt });
 
     const publicRef = doc(db, 'public_tournaments', apiKey);
     const publicDoc = await getDoc(publicRef);
     if (publicDoc.exists()) {
         const pubData = publicDoc.data();
-        const pubMatches = pubData.matches.map((m: Match) => m.id === matchId ? { ...m, scheduledTime } : m);
+        const pubMatches = pubData.matches.map((m: Match) => m.id === matchId ? { ...m, scheduledAt } : m);
         batch.update(publicRef, { matches: pubMatches });
     }
     await batch.commit();
   },
 
-  updateMatchScoreRealtime: async (matchId, team1Score, team2Score, isFinished, tournamentId, apiKey) => {
+  updateMatchScoreRealtime: async (matchId, team1Score, team2Score, isFinished, matchStatus, tournamentId, apiKey) => {
     const state = get();
     const tournament = state.currentTournament;
     if (!tournament) return;
@@ -272,14 +303,14 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
 
     const batch = writeBatch(db);
     const matchRef = doc(db, `tournaments/${tournamentId}/matches`, matchId);
-    batch.update(matchRef, { team1Score, team2Score, isFinished });
+    batch.update(matchRef, { team1Score, team2Score, isFinished, status: matchStatus });
 
     if (!isFinished) {
        const publicRef = doc(db, 'public_tournaments', apiKey);
        const publicDoc = await getDoc(publicRef);
        if(publicDoc.exists()) {
            const pubData = publicDoc.data();
-           const pubMatches = pubData.matches.map((m: Match) => m.id === matchId ? { ...m, team1Score, team2Score, isFinished } : m);
+           const pubMatches = pubData.matches.map((m: Match) => m.id === matchId ? { ...m, team1Score, team2Score, isFinished, status: matchStatus } : m);
            batch.update(publicRef, { matches: pubMatches });
        }
        await batch.commit();
@@ -293,7 +324,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
         let winnerId: string | null = null;
         let loserId: string | null = null;
 
-        if (tournament.knockoutMode === 'best_of_3' && currentMatch.legIndex === 1) {
+        if (tournament.isKnockoutHomeAway && currentMatch.legIndex === 1) {
             const firstLeg = tournament.matches.find(m => m.id === currentMatch.nextMatchId);
             if (firstLeg && firstLeg.isFinished) {
                 let aggT1Score = 0;
@@ -313,7 +344,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
                     loserId = currentMatch.team1Id;
                 }
             }
-        } else if (tournament.knockoutMode !== 'best_of_3') {
+        } else if (!tournament.isKnockoutHomeAway) {
             let t1SetsWon = 0, t2SetsWon = 0;
             for (let i = 0; i < team1Score.length; i++) {
                 if (team1Score[i] > team2Score[i]) t1SetsWon++;
@@ -324,14 +355,14 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
         }
 
         if (winnerId) {
-            const targetNextId = tournament.knockoutMode === 'best_of_3' ?
+            const targetNextId = tournament.isKnockoutHomeAway ?
                 (tournament.matches.find(m => m.id === currentMatch.nextMatchId)?.nextMatchId) : currentMatch.nextMatchId;
 
             if (targetNextId) {
                 const nextMatch = tournament.matches.find(m => m.id === targetNextId);
                 if (nextMatch) {
                     updatedNextMatch = { ...nextMatch };
-                    const slot = tournament.knockoutMode === 'best_of_3' ? tournament.matches.find(m => m.id === currentMatch.nextMatchId)?.nextMatchSlot : currentMatch.nextMatchSlot;
+                    const slot = tournament.isKnockoutHomeAway ? tournament.matches.find(m => m.id === currentMatch.nextMatchId)?.nextMatchSlot : currentMatch.nextMatchSlot;
 
                     if (slot === 'team1') updatedNextMatch.team1Id = winnerId;
                     else updatedNextMatch.team2Id = winnerId;
@@ -341,7 +372,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
                         team2Id: updatedNextMatch.team2Id
                     });
 
-                    if (tournament.knockoutMode === 'best_of_3') {
+                    if (tournament.isKnockoutHomeAway) {
                          const nextNextReturn = tournament.matches.find(m => m.nextMatchId === nextMatch.id && m.legIndex === 1);
                          if (nextNextReturn) {
                              batch.update(doc(db, `tournaments/${tournamentId}/matches`, nextNextReturn.id), {
@@ -523,7 +554,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
                 legIndex: 0
             });
 
-            if (tournament.knockoutMode === 'best_of_3') {
+            if (tournament.isKnockoutHomeAway) {
                 const returnMatchId = Math.random().toString(36).substring(7);
                 bracketMatches.push({
                     id: returnMatchId,
@@ -533,6 +564,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
                     team1Score: [0],
                     team2Score: [0],
                     isFinished: false,
+                    status: 'scheduled',
                     isHomeAndAway: true,
                     legIndex: 1,
                     nextMatchId: matchId
@@ -578,7 +610,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
             match.team1Id = seeds[i]?.id || null;
             match.team2Id = seeds[bracketSize - 1 - i]?.id || null;
 
-            if (tournament.knockoutMode === 'best_of_3') {
+            if (tournament.isKnockoutHomeAway) {
                 const returnMatch = bracketMatches.find(m => m.nextMatchId === match.id && m.legIndex === 1);
                 if (returnMatch) {
                     returnMatch.team1Id = match.team2Id;
@@ -594,7 +626,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     });
 
     const tournamentRef = doc(db, 'tournaments', tournamentId);
-    batch.update(tournamentRef, { status: 'knockout_stage' });
+    batch.update(tournamentRef, { status: 'knockout_stage', hasKnockoutStarted: true });
 
     const publicRef = doc(db, 'public_tournaments', tournament.apiKey);
     const publicDoc = await getDoc(publicRef);
@@ -602,7 +634,8 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
         const pubData = publicDoc.data();
         batch.update(publicRef, {
             matches: [...pubData.matches, ...bracketMatches],
-            status: 'knockout_stage'
+            status: 'knockout_stage',
+            hasKnockoutStarted: true
         });
     }
 

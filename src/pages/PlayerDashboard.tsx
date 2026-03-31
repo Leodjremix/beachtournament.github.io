@@ -116,7 +116,13 @@ const PlayerDashboard = () => {
         });
 
         // Filter and sort matches
-        const scheduledMatches = myMatches.filter(m => m.match.scheduledTime && !m.match.isFinished);
+        const scheduledMatches = myMatches
+            .filter(m => (m.match.scheduledAt || m.match.scheduledTime) && m.match.status !== 'finished' && !m.match.isFinished)
+            .sort((a, b) => {
+                const dateA = a.match.scheduledAt ? new Date(a.match.scheduledAt).getTime() : 0;
+                const dateB = b.match.scheduledAt ? new Date(b.match.scheduledAt).getTime() : 0;
+                return dateA - dateB;
+            });
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -166,9 +172,15 @@ const PlayerDashboard = () => {
                            <div key={idx} className="bg-[#0b0c10]/80 p-4 rounded-xl border-l-4 border-neon-blue relative hover:bg-[#1f2833] transition-colors">
                               <div className="flex justify-between items-start mb-2 border-b border-gray-800 pb-2">
                                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{item.tournamentName}</span>
-                                 <span className="text-xs bg-neon-blue/10 text-neon-blue px-2 py-1 rounded font-mono flex items-center gap-1">
-                                    <Clock className="w-3 h-3" /> {item.match.scheduledTime}
-                                 </span>
+                                 {item.match.status === 'live' ? (
+                                    <span className="text-xs bg-red-500/20 text-red-500 font-bold px-2 py-1 rounded flex items-center gap-1 animate-pulse">
+                                       LIVE
+                                    </span>
+                                 ) : (
+                                    <span className="text-xs bg-neon-blue/10 text-neon-blue px-2 py-1 rounded font-mono flex items-center gap-1">
+                                        <Clock className="w-3 h-3" /> {item.match.scheduledAt ? new Date(item.match.scheduledAt).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : item.match.scheduledTime}
+                                    </span>
+                                 )}
                               </div>
                               <div className="flex items-center justify-between mt-3">
                                   <div className="flex-1 text-center font-bold text-white md:text-lg">{item.myTeamName}</div>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Match } from '../store/useTournamentStore';
-import { Plus, Minus, Check, Clock, Save, CalendarDays } from 'lucide-react';
+import { Plus, Minus, Check, Clock, Save, CalendarDays, Play } from 'lucide-react';
 
 interface LiveScoreProps {
   match: Match;
@@ -8,21 +8,22 @@ interface LiveScoreProps {
   team2Name: string;
   groupName?: string;
   isAdmin: boolean;
-  onUpdate: (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean) => Promise<void>;
-  onScheduleUpdate?: (matchId: string, scheduledTime: string) => Promise<void>;
+  onUpdate: (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean, matchStatus: 'scheduled' | 'live' | 'finished') => Promise<void>;
+  onScheduleUpdate?: (matchId: string, scheduledAt: string) => Promise<void>;
 }
 
 const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate, onScheduleUpdate }: LiveScoreProps) => {
   const [t1Score, setT1Score] = useState<number[]>([...match.team1Score]);
   const [t2Score, setT2Score] = useState<number[]>([...match.team2Score]);
   const [isFinished, setIsFinished] = useState(match.isFinished);
+  const [matchStatus, setMatchStatus] = useState<'scheduled' | 'live' | 'finished'>(match.status || (match.isFinished ? 'finished' : 'scheduled'));
   const [isUpdating, setIsUpdating] = useState(false);
 
   const [showSchedule, setShowSchedule] = useState(false);
-  const [scheduleTime, setScheduleTime] = useState(match.scheduledTime || '');
+  const [scheduleTime, setScheduleTime] = useState(match.scheduledAt || '');
 
   const handleScoreChange = async (team: 1 | 2, setIndex: number, delta: number) => {
-    if (isFinished || !isAdmin || isUpdating) return;
+    if (isFinished || !isAdmin || isUpdating || matchStatus !== 'live') return;
 
     setIsUpdating(true);
     const newT1Score = [...t1Score];
@@ -36,7 +37,7 @@ const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate, 
       setT2Score(newT2Score);
     }
 
-    await onUpdate(match.id, newT1Score, newT2Score, false);
+    await onUpdate(match.id, newT1Score, newT2Score, false, 'live');
     setIsUpdating(false);
   };
 
@@ -46,7 +47,7 @@ const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate, 
     const newT2Score = [...t2Score, 0];
     setT1Score(newT1Score);
     setT2Score(newT2Score);
-    await onUpdate(match.id, newT1Score, newT2Score, false);
+    await onUpdate(match.id, newT1Score, newT2Score, false, 'live');
   };
 
   const closeMatch = async () => {
@@ -54,10 +55,19 @@ const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate, 
     if (window.confirm("Sei sicuro di voler chiudere la partita? Questo aggiornerà definitivamente le classifiche o l'avanzamento tabellone.")) {
         setIsUpdating(true);
         setIsFinished(true);
-        await onUpdate(match.id, t1Score, t2Score, true);
+        setMatchStatus('finished');
+        await onUpdate(match.id, t1Score, t2Score, true, 'finished');
         setIsUpdating(false);
     }
   };
+
+  const startMatch = async () => {
+    if (!isAdmin || isUpdating) return;
+    setIsUpdating(true);
+    setMatchStatus('live');
+    await onUpdate(match.id, t1Score, t2Score, false, 'live');
+    setIsUpdating(false);
+  }
 
   const handleScheduleSave = async () => {
     if (!onScheduleUpdate || isUpdating) return;
@@ -68,14 +78,17 @@ const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate, 
   };
 
   return (
-    <div className={`glass-panel p-4 flex flex-col gap-4 relative transition-all ${isFinished ? 'opacity-70 grayscale-[30%] border-[rgba(255,255,255,0.1)]' : 'border-l-[4px] border-neon-blue'}`}>
+    <div className={`glass-panel p-4 flex flex-col gap-4 relative transition-all ${isFinished ? 'opacity-70 grayscale-[30%] border-[rgba(255,255,255,0.1)]' : matchStatus === 'live' ? 'border-l-[4px] border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-l-[4px] border-neon-blue'}`}>
       <div className="flex justify-between items-center border-b border-[rgba(255,255,255,0.1)] pb-2">
-        <span className="text-xs font-bold text-neon-blue uppercase tracking-wider">{groupName || match.phaseType}</span>
+        <span className="text-xs font-bold text-neon-blue uppercase tracking-wider flex items-center gap-2">
+            {groupName || match.phaseType.replace('_', ' ')}
+            {matchStatus === 'live' && <span className="bg-red-500/20 text-red-500 text-[10px] px-2 py-0.5 rounded-full animate-pulse flex items-center gap-1"><span className="w-2 h-2 bg-red-500 rounded-full inline-block"></span> LIVE</span>}
+        </span>
 
         <div className="flex items-center gap-2">
-           {match.scheduledTime && !showSchedule && (
+           {match.scheduledAt && !showSchedule && matchStatus !== 'live' && !isFinished && (
                <span className="text-xs font-mono bg-neon-orange/20 text-neon-orange px-2 py-1 rounded flex items-center gap-1">
-                   <CalendarDays className="w-3 h-3" /> {match.scheduledTime}
+                   <CalendarDays className="w-3 h-3" /> {new Date(match.scheduledAt).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'})}
                </span>
            )}
            {isAdmin && !isFinished && onScheduleUpdate && (
@@ -90,8 +103,7 @@ const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate, 
       {showSchedule && isAdmin && (
           <div className="flex items-center gap-2 bg-[#0b0c10] p-2 rounded border border-neon-orange/30">
               <input
-                 type="text"
-                 placeholder="Es. 15/08 ore 16:30"
+                 type="datetime-local"
                  value={scheduleTime}
                  onChange={(e) => setScheduleTime(e.target.value)}
                  className="flex-1 bg-transparent text-sm text-white focus:outline-none placeholder-gray-600"
@@ -113,11 +125,11 @@ const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate, 
                 <div className="flex items-center gap-2">
                    {currentScores.map((score, setIdx) => (
                       <div key={setIdx} className="flex items-center gap-1 bg-[#1f2833] rounded px-1 border border-gray-700">
-                        {isAdmin && !isFinished && (
+                        {isAdmin && !isFinished && matchStatus === 'live' && (
                           <button onClick={() => handleScoreChange(isTeam1 ? 1 : 2, setIdx, -1)} disabled={isUpdating} className="p-1 text-gray-400 hover:text-red-400"><Minus className="w-3 h-3" /></button>
                         )}
                         <span className={`font-mono text-lg font-bold w-6 text-center ${isFinished ? 'text-gray-500' : 'text-neon-orange'}`}>{score}</span>
-                        {isAdmin && !isFinished && (
+                        {isAdmin && !isFinished && matchStatus === 'live' && (
                           <button onClick={() => handleScoreChange(isTeam1 ? 1 : 2, setIdx, 1)} disabled={isUpdating} className="p-1 text-gray-400 hover:text-green-400"><Plus className="w-3 h-3" /></button>
                         )}
                       </div>
@@ -130,12 +142,20 @@ const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate, 
 
       {isAdmin && !isFinished && (
         <div className="flex justify-between mt-2 pt-2 border-t border-[rgba(255,255,255,0.05)]">
-           <button onClick={addSet} disabled={isUpdating} className="text-xs text-neon-blue hover:text-white flex items-center gap-1">
-              <Plus className="w-3 h-3" /> Nuovo Set
-           </button>
-           <button onClick={closeMatch} disabled={isUpdating} className="btn-primary py-1 px-3 text-xs flex items-center gap-1">
-              <Check className="w-3 h-3" /> Chiudi Partita
-           </button>
+           {matchStatus === 'live' ? (
+               <>
+                   <button onClick={addSet} disabled={isUpdating} className="text-xs text-neon-blue hover:text-white flex items-center gap-1">
+                      <Plus className="w-3 h-3" /> Nuovo Set
+                   </button>
+                   <button onClick={closeMatch} disabled={isUpdating} className="btn-primary py-1 px-3 text-xs flex items-center gap-1">
+                      <Check className="w-3 h-3" /> Chiudi Partita
+                   </button>
+               </>
+           ) : (
+               <button onClick={startMatch} disabled={isUpdating} className="w-full btn-secondary text-neon-orange border-neon-orange py-1 px-3 text-xs flex items-center justify-center gap-1 hover:bg-neon-orange hover:text-[#0b0c10]">
+                  <Play className="w-3 h-3" /> Avvia Partita LIVE
+               </button>
+           )}
         </div>
       )}
     </div>

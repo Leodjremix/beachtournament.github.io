@@ -48,6 +48,28 @@
             border-left-color: #4CAF50;
             opacity: 0.8;
         }
+        .match-card.live-match {
+            border-left-color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+            transform: scale(1.02);
+            margin: 15px 0;
+            padding: 16px;
+        }
+        .blinking-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #ef4444;
+            border-radius: 50%;
+            margin-right: 5px;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
         .team-row {
             display: flex;
             justify-content: space-between;
@@ -149,20 +171,18 @@
             const statusStr = data.status === 'archived' ? ' (Archiviato)' : (data.status === 'knockout_stage' ? ' - Fase Finale' : ' - Fase a Gironi');
             html = `<h2>${data.name}<span style="font-size: 0.6em; color: #aaa;">${statusStr}</span></h2>`;
 
-            // 1. Partite Live (In corso o appena programmate)
-            const liveMatches = data.matches ? data.matches.filter(m => !m.isFinished) : [];
-
+            // 1. Partite Live
+            const liveMatches = data.matches ? data.matches.filter(m => m.status === 'live') : [];
             if (liveMatches.length > 0) {
-                html += `<h3>Partite Live / Prossime</h3>`;
+                html += `<h3 style="color: #ef4444;"><span class="blinking-dot"></span> LIVE ORA</h3>`;
                 liveMatches.forEach(match => {
                     const t1Name = getTeamName(data.groups, match.team1Id);
                     const t2Name = getTeamName(data.groups, match.team2Id);
-
                     html += `
-                    <div class="match-card">
+                    <div class="match-card live-match">
                         <div class="meta">
                             <span>${match.phaseType.replace('_', ' ')}</span>
-                            <span>${match.scheduledTime ? '⏰ ' + match.scheduledTime : 'Live'}</span>
+                            <span style="color: #ef4444; font-weight: bold;">IN CORSO</span>
                         </div>
                         <div class="team-row">
                             <span>${t1Name}</span>
@@ -176,8 +196,34 @@
                 });
             }
 
+            // 1b. Partite Programmate (Upcoming) ordinate cronologicamente
+            const scheduledMatches = data.matches ? data.matches
+                .filter(m => m.status === 'scheduled' || (!m.isFinished && m.status !== 'live'))
+                .sort((a, b) => {
+                    const dateA = a.scheduledAt ? new Date(a.scheduledAt).getTime() : 0;
+                    const dateB = b.scheduledAt ? new Date(b.scheduledAt).getTime() : 0;
+                    return dateA - dateB;
+                }) : [];
+
+            if (scheduledMatches.length > 0) {
+                html += `<h3>Prossime Partite</h3>`;
+                scheduledMatches.forEach(match => {
+                    const t1Name = getTeamName(data.groups, match.team1Id);
+                    const t2Name = getTeamName(data.groups, match.team2Id);
+                    const timeStr = match.scheduledAt ? new Date(match.scheduledAt).toLocaleString('it-IT', {day: '2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : match.scheduledTime;
+                    html += `
+                    <div class="match-card" style="padding: 8px; margin-bottom: 6px;">
+                        <div class="meta" style="margin-bottom: 4px;">
+                            <span>${match.phaseType.replace('_', ' ')}</span>
+                            <span>${timeStr ? '⏰ ' + timeStr : 'Da definire'}</span>
+                        </div>
+                        <div class="team-row" style="font-size: 0.9em; margin: 2px 0;"><span>${t1Name}</span> <span>vs</span> <span>${t2Name}</span></div>
+                    </div>`;
+                });
+            }
+
             // 2. Ultimi Risultati (Ultime 3 finite)
-            const finishedMatches = data.matches ? data.matches.filter(m => m.isFinished).slice(-3) : [];
+            const finishedMatches = data.matches ? data.matches.filter(m => m.isFinished || m.status === 'finished').slice(-3) : [];
             if (finishedMatches.length > 0) {
                  html += `<h3>Ultimi Risultati</h3>`;
                  finishedMatches.forEach(match => {
@@ -193,7 +239,7 @@
             }
 
             // 3. Renderizzazione Condizionale Tabellone Finale
-            if (data.status === 'knockout_stage' || data.status === 'archived') {
+            if (data.hasKnockoutStarted === true) {
                 const bracketMatches = data.matches ? data.matches.filter(m => m.phaseType !== 'groups') : [];
                 if (bracketMatches.length > 0) {
                     html += `<h3 style="color: #c5b4e3; border-bottom: 1px solid rgba(197,180,227,0.3); padding-bottom: 5px;">Tabellone Fasi Finali</h3>`;
@@ -211,25 +257,31 @@
                                 const t2Name = getTeamName(data.groups, match.team2Id);
                                 const returnMatch = bracketMatches.find(m => m.nextMatchId === match.id && m.legIndex === 1);
 
+                                const isMatchLive = match.status === 'live';
+                                const timeStrMatch = match.scheduledAt ? new Date(match.scheduledAt).toLocaleString('it-IT', {day: '2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : match.scheduledTime;
+
                                 html += `
-                                <div class="match-card ${match.isFinished ? 'finished' : ''}" style="border-left-color: #c5b4e3;">
+                                <div class="match-card ${match.isFinished ? 'finished' : ''} ${isMatchLive ? 'live-match' : ''}" style="${!match.isFinished && !isMatchLive ? 'border-left-color: #c5b4e3;' : ''}">
                                     <div class="meta">
-                                        <span>${match.scheduledTime ? '⏰ ' + match.scheduledTime : 'Da definire'}</span>
-                                        ${match.isFinished ? '<span>FINITA</span>' : ''}
+                                        <span>${timeStrMatch ? '⏰ ' + timeStrMatch : 'Da definire'}</span>
+                                        ${match.isFinished ? '<span>FINITA</span>' : isMatchLive ? '<span style="color:#ef4444" class="blinking-dot"></span>' : ''}
                                     </div>
-                                    ${returnMatch ? '<div style="font-size:0.7rem; color:#c5b4e3;">Andata</div>' : ''}
+                                    ${returnMatch ? '<div style="font-size:0.7rem; color:#c5b4e3; margin-bottom:4px;">Andata</div>' : ''}
                                     <div class="team-row"><span>${t1Name}</span> <span class="score">${match.team1Score.join(' - ')}</span></div>
                                     <div class="team-row"><span>${t2Name}</span> <span class="score">${match.team2Score.join(' - ')}</span></div>
                                 `;
 
                                 if (returnMatch) {
+                                    const isReturnLive = returnMatch.status === 'live';
+                                    const timeStrReturn = returnMatch.scheduledAt ? new Date(returnMatch.scheduledAt).toLocaleString('it-IT', {day: '2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : returnMatch.scheduledTime;
+
                                     html += `
-                                    <div style="border-top: 1px solid rgba(255,255,255,0.1); margin-top: 8px; padding-top: 8px;">
+                                    <div style="border-top: 1px solid rgba(255,255,255,0.1); margin-top: 8px; padding-top: 8px;" class="${isReturnLive ? 'live-match' : ''}">
                                         <div class="meta">
-                                            <span>${returnMatch.scheduledTime ? '⏰ ' + returnMatch.scheduledTime : 'Da definire'}</span>
-                                            ${returnMatch.isFinished ? '<span>FINITA</span>' : ''}
+                                            <span>${timeStrReturn ? '⏰ ' + timeStrReturn : 'Da definire'}</span>
+                                            ${returnMatch.isFinished ? '<span>FINITA</span>' : isReturnLive ? '<span style="color:#ef4444" class="blinking-dot"></span>' : ''}
                                         </div>
-                                        <div style="font-size:0.7rem; color:#ff6b00;">Ritorno</div>
+                                        <div style="font-size:0.7rem; color:#ff6b00; margin-bottom:4px;">Ritorno</div>
                                         <div class="team-row"><span>${getTeamName(data.groups, returnMatch.team1Id)}</span> <span class="score">${returnMatch.team1Score.join(' - ')}</span></div>
                                         <div class="team-row"><span>${getTeamName(data.groups, returnMatch.team2Id)}</span> <span class="score">${returnMatch.team2Score.join(' - ')}</span></div>
                                     </div>

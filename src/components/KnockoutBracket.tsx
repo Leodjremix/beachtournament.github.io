@@ -8,9 +8,9 @@ export function KnockoutBracket({ tournament, isAdmin, onScheduleUpdate }: { tou
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const updateMatchScoreRealtime = useTournamentStore((state) => state.updateMatchScoreRealtime);
 
-  const handleScoreUpdate = async (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean) => {
+  const handleScoreUpdate = async (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean, matchStatus: 'scheduled' | 'live' | 'finished') => {
     if(!isAdmin) return;
-    await updateMatchScoreRealtime(matchId, team1Score, team2Score, isFinished, tournament.id, tournament.apiKey);
+    await updateMatchScoreRealtime(matchId, team1Score, team2Score, isFinished, matchStatus, tournament.id, tournament.apiKey);
     const updatedMatch = tournament.matches.find(m => m.id === matchId);
     if(updatedMatch) setSelectedMatch({ ...updatedMatch, team1Score, team2Score, isFinished });
     if (isFinished) setSelectedMatch(null);
@@ -55,10 +55,17 @@ export function KnockoutBracket({ tournament, isAdmin, onScheduleUpdate }: { tou
 
                     {/* Gara Andata / Gara Secca */}
                     <div
-                        className={`p-4 cursor-pointer ${returnMatch ? 'border-b border-[rgba(255,255,255,0.1)]' : ''}`}
+                        className={`p-4 cursor-pointer ${returnMatch ? 'border-b border-[rgba(255,255,255,0.1)]' : ''} ${match.status === 'live' ? 'bg-red-500/10' : ''}`}
                         onClick={() => isAdmin && match.team1Id && match.team2Id && setSelectedMatch(match)}
                     >
-                        {returnMatch && <div className="text-[10px] text-neon-blue font-bold mb-1 uppercase">Andata</div>}
+                        <div className="flex justify-between items-center mb-2">
+                           {returnMatch && <div className="text-[10px] text-neon-blue font-bold uppercase">Andata</div>}
+                           <div className="flex items-center gap-2">
+                               {match.scheduledAt && match.status !== 'live' && !match.isFinished && <span className="text-[10px] text-gray-400">⏰ {new Date(match.scheduledAt).toLocaleString('it-IT', {day: '2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'})}</span>}
+                               {match.status === 'live' && <span className="text-[10px] text-red-500 font-bold animate-pulse">LIVE</span>}
+                               {match.isFinished && <span className="text-[10px] text-green-500 font-bold">FINITA</span>}
+                           </div>
+                        </div>
                         <div className="flex justify-between items-center text-sm mb-2">
                           <div className={`truncate font-medium ${match.isFinished ? 'text-gray-400' : 'text-white'}`}>{getTeamDisplay(match.team1Id)}</div>
                           <div className="text-neon-orange font-bold text-xs">{match.team1Score.join(' - ')}</div>
@@ -72,10 +79,17 @@ export function KnockoutBracket({ tournament, isAdmin, onScheduleUpdate }: { tou
                     {/* Gara Ritorno */}
                     {returnMatch && (
                         <div
-                            className="p-4 bg-[rgba(0,0,0,0.2)] cursor-pointer"
+                            className={`p-4 bg-[rgba(0,0,0,0.2)] cursor-pointer ${returnMatch.status === 'live' ? 'bg-red-500/10' : ''}`}
                             onClick={() => isAdmin && returnMatch.team1Id && returnMatch.team2Id && setSelectedMatch(returnMatch)}
                         >
-                            <div className="text-[10px] text-neon-orange font-bold mb-1 uppercase">Ritorno</div>
+                            <div className="flex justify-between items-center mb-2">
+                               <div className="text-[10px] text-neon-orange font-bold uppercase">Ritorno</div>
+                               <div className="flex items-center gap-2">
+                                   {returnMatch.scheduledAt && returnMatch.status !== 'live' && !returnMatch.isFinished && <span className="text-[10px] text-gray-400">⏰ {new Date(returnMatch.scheduledAt).toLocaleString('it-IT', {day: '2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'})}</span>}
+                                   {returnMatch.status === 'live' && <span className="text-[10px] text-red-500 font-bold animate-pulse">LIVE</span>}
+                                   {returnMatch.isFinished && <span className="text-[10px] text-green-500 font-bold">FINITA</span>}
+                               </div>
+                            </div>
                             <div className="flex justify-between items-center text-sm mb-2">
                               <div className={`truncate font-medium ${returnMatch.isFinished ? 'text-gray-400' : 'text-white'}`}>{getTeamDisplay(returnMatch.team1Id)}</div>
                               <div className="text-neon-orange font-bold text-xs">{returnMatch.team1Score.join(' - ')}</div>

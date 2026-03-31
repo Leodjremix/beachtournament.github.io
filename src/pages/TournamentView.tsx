@@ -30,9 +30,9 @@ const TournamentView = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleScoreUpdate = async (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean) => {
+  const handleScoreUpdate = async (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean, matchStatus: 'scheduled' | 'live' | 'finished') => {
     if(!isAdmin) return;
-    await updateMatchScoreRealtime(matchId, team1Score, team2Score, isFinished, currentTournament.id, currentTournament.apiKey);
+    await updateMatchScoreRealtime(matchId, team1Score, team2Score, isFinished, matchStatus, currentTournament.id, currentTournament.apiKey);
   };
 
   const handleScheduleUpdate = async (matchId: string, scheduledTime: string) => {

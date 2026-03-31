@@ -11,6 +11,8 @@ const CreateTournament = () => {
   const [name, setName] = useState('');
   const [groupStageMode, setGroupStageMode] = useState<ScoringMode>('single_set');
   const [knockoutMode, setKnockoutMode] = useState<ScoringMode>('best_of_3');
+  const [isGroupStageHomeAway, setIsGroupStageHomeAway] = useState(false);
+  const [isKnockoutHomeAway, setIsKnockoutHomeAway] = useState(false);
   const [pointsPerSetWon, setPointsPerSetWon] = useState<number>(3);
 
   const [numberOfGroups, setNumberOfGroups] = useState<number>(2);
@@ -64,6 +66,8 @@ const CreateTournament = () => {
       name,
       groupStageMode,
       knockoutMode,
+      isGroupStageHomeAway,
+      isKnockoutHomeAway,
       pointsPerSetWon,
       { numberOfGroups, qualifiersPerGroup },
       tieBreakers,
@@ -97,6 +101,13 @@ const CreateTournament = () => {
             </div>
 
             <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-3 cursor-pointer mt-7">
+                <input type="checkbox" checked={isGroupStageHomeAway} onChange={e => setIsGroupStageHomeAway(e.target.checked)} className="w-5 h-5 accent-neon-blue bg-[rgba(0,0,0,0.5)] border-[rgba(255,255,255,0.2)] rounded" />
+                <span className="text-sm font-medium text-white">Gironi Andata e Ritorno</span>
+              </label>
+            </div>
+
+            <div className="flex flex-col gap-2">
               <label className="text-sm text-gray-400">Punti per Set Vinto</label>
               <input type="number" value={pointsPerSetWon} onChange={e => setPointsPerSetWon(Number(e.target.value))} className="input-glass" min="1" />
             </div>
@@ -119,7 +130,14 @@ const CreateTournament = () => {
               </select>
             </div>
 
-            <label className="flex items-center gap-3 cursor-pointer mt-4">
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-3 cursor-pointer mt-7">
+                <input type="checkbox" checked={isKnockoutHomeAway} onChange={e => setIsKnockoutHomeAway(e.target.checked)} className="w-5 h-5 accent-neon-blue bg-[rgba(0,0,0,0.5)] border-[rgba(255,255,255,0.2)] rounded" />
+                <span className="text-sm font-medium text-white">Fasi Finali Andata e Ritorno</span>
+              </label>
+            </div>
+
+            <label className="flex items-center gap-3 cursor-pointer mt-4 md:col-span-2">
               <input type="checkbox" checked={hasThirdPlaceMatch} onChange={e => setHasThirdPlaceMatch(e.target.checked)} className="w-5 h-5 accent-neon-orange bg-[rgba(0,0,0,0.5)] border-[rgba(255,255,255,0.2)] rounded" />
               <span className="text-sm font-medium text-white">Includi Finale 3°/4° Posto</span>
             </label>
