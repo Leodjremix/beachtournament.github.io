@@ -472,7 +472,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
             const publicDoc = await getDoc(publicRef);
             if(publicDoc.exists()) {
                 const pubData = publicDoc.data();
-                const pubMatches = pubData.matches.map((m: Match) => m.id === matchId ? { ...m, team1Score, team2Score, isFinished } : m);
+                const pubMatches = pubData.matches.map((m: Match) => m.id === matchId ? { ...m, team1Score, team2Score, isFinished, status: matchStatus } : m);
                 batch.update(publicRef, {
                     matches: pubMatches,
                     groups: newGroupsCalculated
@@ -484,7 +484,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
         const publicDoc = await getDoc(publicRef);
         if(publicDoc.exists()) {
             const pubData = publicDoc.data();
-            let pubMatches = pubData.matches.map((m: Match) => m.id === matchId ? { ...m, team1Score, team2Score, isFinished } : m);
+            let pubMatches = pubData.matches.map((m: Match) => m.id === matchId ? { ...m, team1Score, team2Score, isFinished, status: matchStatus } : m);
             if (updatedNextMatch) {
                 pubMatches = pubMatches.map((m: Match) => m.id === updatedNextMatch!.id ? { ...m, team1Id: updatedNextMatch!.team1Id, team2Id: updatedNextMatch!.team2Id } : m);
             }
@@ -550,6 +550,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
                 team1Score: [0],
                 team2Score: [0],
                 isFinished: false,
+                status: 'scheduled',
                 isHomeAndAway: false,
                 legIndex: 0
             });
@@ -599,6 +600,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
             team2Id: null,
             team1Score: [0],
             team2Score: [0],
+            status: 'scheduled',
             isFinished: false
         });
     }

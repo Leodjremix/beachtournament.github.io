@@ -117,10 +117,10 @@ const PlayerDashboard = () => {
 
         // Filter and sort matches
         const scheduledMatches = myMatches
-            .filter(m => (m.match.scheduledAt || m.match.scheduledTime) && m.match.status !== 'finished' && !m.match.isFinished)
+            .filter(m => m.match.status !== 'finished' && !m.match.isFinished)
             .sort((a, b) => {
-                const dateA = a.match.scheduledAt ? new Date(a.match.scheduledAt).getTime() : 0;
-                const dateB = b.match.scheduledAt ? new Date(b.match.scheduledAt).getTime() : 0;
+                const dateA = a.match.scheduledAt ? new Date(a.match.scheduledAt).getTime() : Infinity;
+                const dateB = b.match.scheduledAt ? new Date(b.match.scheduledAt).getTime() : Infinity;
                 return dateA - dateB;
             });
 
@@ -178,7 +178,7 @@ const PlayerDashboard = () => {
                                     </span>
                                  ) : (
                                     <span className="text-xs bg-neon-blue/10 text-neon-blue px-2 py-1 rounded font-mono flex items-center gap-1">
-                                        <Clock className="w-3 h-3" /> {item.match.scheduledAt ? new Date(item.match.scheduledAt).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : item.match.scheduledTime}
+                                        <Clock className="w-3 h-3" /> {item.match.scheduledAt ? new Date(item.match.scheduledAt).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : (item.match.scheduledTime || 'DA DEFINIRE')}
                                     </span>
                                  )}
                               </div>
