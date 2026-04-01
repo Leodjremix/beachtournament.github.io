@@ -34,8 +34,20 @@ function App() {
         {/* Navbar */}
         <nav className="glass-panel m-4 p-4 flex justify-between items-center sticky top-4 z-50">
           <Link to="/" className="flex items-center gap-3">
-            <div className="p-2 bg-neon-blue rounded-full">
-              <Volleyball className="w-6 h-6 text-[#0b0c10]" />
+            <div className="relative p-1 bg-transparent rounded-full border-2 border-neon-blue shadow-[0_0_10px_rgba(0,243,255,0.6)] hover:shadow-[0_0_15px_rgba(255,94,0,0.6)] transition-all duration-300 overflow-hidden w-10 h-10 flex items-center justify-center">
+               {/* Try to load custom logo.png, fallback to Volleyball icon if it fails to load or isn't there (using onError) */}
+               <img
+                  src={`${import.meta.env.BASE_URL}logo.png`}
+                  alt="Logo"
+                  className="w-full h-full object-contain drop-shadow-[0_0_5px_rgba(0,243,255,0.8)]"
+                  onError={(e) => {
+                     e.currentTarget.style.display = 'none';
+                     if (e.currentTarget.nextElementSibling) {
+                         (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'block';
+                     }
+                  }}
+               />
+               <Volleyball className="w-6 h-6 text-neon-blue drop-shadow-[0_0_8px_rgba(0,243,255,0.8)]" style={{ display: 'none' }} />
             </div>
             <span className="text-xl font-bold tracking-wider text-white">BEACH<span className="text-neon-orange">VOLLEY</span></span>
           </Link>

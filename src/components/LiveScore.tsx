@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Match } from '../store/useTournamentStore';
 import { Plus, Minus, Check, Clock, Save, CalendarDays, Play } from 'lucide-react';
 
@@ -21,6 +21,19 @@ const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate, 
 
   const [showSchedule, setShowSchedule] = useState(false);
   const [scheduleTime, setScheduleTime] = useState(match.scheduledAt || '');
+
+  // Local state for input values to prevent locking while typing
+  const [localT1Score, setLocalT1Score] = useState<string[]>(match.team1Score.map(String));
+  const [localT2Score, setLocalT2Score] = useState<string[]>(match.team2Score.map(String));
+
+  // Sync local score when external state changes (e.g., from buttons)
+  useEffect(() => {
+    setLocalT1Score(t1Score.map(String));
+  }, [t1Score]);
+
+  useEffect(() => {
+    setLocalT2Score(t2Score.map(String));
+  }, [t2Score]);
 
   const handleScoreChange = async (team: 1 | 2, setIndex: number, delta: number) => {
     if (isFinished || !isAdmin || isUpdating || matchStatus !== 'live') return;
@@ -128,7 +141,55 @@ const LiveScore = ({ match, team1Name, team2Name, groupName, isAdmin, onUpdate, 
                         {isAdmin && !isFinished && matchStatus === 'live' && (
                           <button onClick={() => handleScoreChange(isTeam1 ? 1 : 2, setIdx, -1)} disabled={isUpdating} className="p-1 text-gray-400 hover:text-red-400"><Minus className="w-3 h-3" /></button>
                         )}
-                        <span className={`font-mono text-lg font-bold w-6 text-center ${isFinished ? 'text-gray-500' : 'text-neon-orange'}`}>{score}</span>
+
+                        {isAdmin && !isFinished && matchStatus === 'live' ? (
+                            <input
+                                type="number"
+                                value={isTeam1 ? localT1Score[setIdx] : localT2Score[setIdx]}
+                                min="0"
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (isTeam1) {
+                                        const newScores = [...localT1Score];
+                                        newScores[setIdx] = val;
+                                        setLocalT1Score(newScores);
+                                    } else {
+                                        const newScores = [...localT2Score];
+                                        newScores[setIdx] = val;
+                                        setLocalT2Score(newScores);
+                                    }
+                                }}
+                                onBlur={async () => {
+                                    const val = parseInt(isTeam1 ? localT1Score[setIdx] : localT2Score[setIdx]);
+                                    if (!isNaN(val) && val >= 0 && val !== score) {
+                                        const delta = val - score;
+                                        await handleScoreChange(isTeam1 ? 1 : 2, setIdx, delta);
+                                    } else if (isNaN(val)) {
+                                       // Reset to actual score if input is invalid/empty
+                                        if (isTeam1) {
+                                            const newScores = [...localT1Score];
+                                            newScores[setIdx] = String(score);
+                                            setLocalT1Score(newScores);
+                                        } else {
+                                            const newScores = [...localT2Score];
+                                            newScores[setIdx] = String(score);
+                                            setLocalT2Score(newScores);
+                                        }
+                                    }
+                                }}
+                                onKeyDown={async (e) => {
+                                    if (e.key === 'Enter') {
+                                        e.currentTarget.blur();
+                                    }
+                                }}
+                                disabled={isUpdating}
+                                className={`font-mono text-lg font-bold w-8 text-center bg-transparent focus:outline-none focus:ring-1 focus:ring-neon-blue rounded text-neon-orange appearance-none hide-arrows`}
+                                style={{ MozAppearance: 'textfield' }}
+                            />
+                        ) : (
+                            <span className={`font-mono text-lg font-bold w-6 text-center ${isFinished ? 'text-gray-500' : 'text-neon-orange'}`}>{score}</span>
+                        )}
+
                         {isAdmin && !isFinished && matchStatus === 'live' && (
                           <button onClick={() => handleScoreChange(isTeam1 ? 1 : 2, setIdx, 1)} disabled={isUpdating} className="p-1 text-gray-400 hover:text-green-400"><Plus className="w-3 h-3" /></button>
                         )}
