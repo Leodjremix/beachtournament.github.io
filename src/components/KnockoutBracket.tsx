@@ -6,7 +6,9 @@ import { useTournamentStore } from '../store/useTournamentStore';
 export function KnockoutBracket({ tournament, isAdmin, onScheduleUpdate }: { tournament: Tournament, isAdmin: boolean, onScheduleUpdate?: (matchId: string, scheduledTime: string) => Promise<void> }) {
   const bracketMatches = tournament.matches.filter(m => m.phaseType !== 'groups');
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const [manualSelectData, setManualSelectData] = useState<{matchId: string, slot: 'team1Id' | 'team2Id'} | null>(null);
   const updateMatchScoreRealtime = useTournamentStore((state) => state.updateMatchScoreRealtime);
+  const setManualKnockoutTeam = useTournamentStore((state) => state.setManualKnockoutTeam);
 
   const handleScoreUpdate = async (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean, matchStatus: 'scheduled' | 'live' | 'finished') => {
     if(!isAdmin) return;
@@ -26,14 +28,21 @@ export function KnockoutBracket({ tournament, isAdmin, onScheduleUpdate }: { tou
 
   const phases = ['round_16', 'quarter_finals', 'semi_finals', 'finals', 'third_place'].filter(p => bracketMatches.some(m => m.phaseType === p));
 
-  const getTeamDisplay = (teamId: string | null) => {
-    if (!teamId) return <span className="text-gray-500 italic">TBD</span>;
+  const getTeamDisplay = (teamId: string | null, matchId: string, slot: 'team1Id' | 'team2Id', isFirstPhase: boolean) => {
+    if (!teamId) {
+        if (isAdmin && isFirstPhase) {
+            return <button onClick={(e) => { e.stopPropagation(); setManualSelectData({matchId, slot}); }} className="text-[10px] bg-neon-blue/20 text-neon-blue hover:bg-neon-blue hover:text-[#0b0c10] px-2 py-1 rounded transition-colors">Seleziona Squadra</button>;
+        }
+        return <span className="text-gray-500 italic">TBD</span>;
+    }
     for (const group of tournament.groups) {
       const team = group.teams.find(t => t.id === teamId);
       if (team) return team.name;
     }
     return <span className="text-gray-500 italic">TBD</span>;
   };
+
+  const nonQualifiedTeams = tournament.groups.flatMap(g => g.teams).filter(t => !bracketMatches.some(m => m.team1Id === t.id || m.team2Id === t.id));
 
   return (
     <div className="w-full overflow-x-auto pb-8">
@@ -67,11 +76,11 @@ export function KnockoutBracket({ tournament, isAdmin, onScheduleUpdate }: { tou
                            </div>
                         </div>
                         <div className="flex justify-between items-center text-sm mb-2">
-                          <div className={`truncate font-medium ${match.isFinished ? 'text-gray-400' : 'text-white'}`}>{getTeamDisplay(match.team1Id)}</div>
+                          <div className={`truncate font-medium ${match.isFinished ? 'text-gray-400' : 'text-white'}`}>{getTeamDisplay(match.team1Id, match.id, 'team1Id', pIndex === 0)}</div>
                           <div className="text-neon-orange font-bold text-xs">{match.team1Score.join(' - ')}</div>
                         </div>
                         <div className="flex justify-between items-center text-sm">
-                          <div className={`truncate font-medium ${match.isFinished ? 'text-gray-400' : 'text-white'}`}>{getTeamDisplay(match.team2Id)}</div>
+                          <div className={`truncate font-medium ${match.isFinished ? 'text-gray-400' : 'text-white'}`}>{getTeamDisplay(match.team2Id, match.id, 'team2Id', pIndex === 0)}</div>
                           <div className="text-neon-orange font-bold text-xs">{match.team2Score.join(' - ')}</div>
                         </div>
                     </div>
@@ -91,11 +100,11 @@ export function KnockoutBracket({ tournament, isAdmin, onScheduleUpdate }: { tou
                                </div>
                             </div>
                             <div className="flex justify-between items-center text-sm mb-2">
-                              <div className={`truncate font-medium ${returnMatch.isFinished ? 'text-gray-400' : 'text-white'}`}>{getTeamDisplay(returnMatch.team1Id)}</div>
+                              <div className={`truncate font-medium ${returnMatch.isFinished ? 'text-gray-400' : 'text-white'}`}>{getTeamDisplay(returnMatch.team1Id, returnMatch.id, 'team1Id', false)}</div>
                               <div className="text-neon-orange font-bold text-xs">{returnMatch.team1Score.join(' - ')}</div>
                             </div>
                             <div className="flex justify-between items-center text-sm">
-                              <div className={`truncate font-medium ${returnMatch.isFinished ? 'text-gray-400' : 'text-white'}`}>{getTeamDisplay(returnMatch.team2Id)}</div>
+                              <div className={`truncate font-medium ${returnMatch.isFinished ? 'text-gray-400' : 'text-white'}`}>{getTeamDisplay(returnMatch.team2Id, returnMatch.id, 'team2Id', false)}</div>
                               <div className="text-neon-orange font-bold text-xs">{returnMatch.team2Score.join(' - ')}</div>
                             </div>
                         </div>
@@ -120,12 +129,38 @@ export function KnockoutBracket({ tournament, isAdmin, onScheduleUpdate }: { tou
 
             <LiveScore
               match={selectedMatch}
-              team1Name={getTeamDisplay(selectedMatch.team1Id) as string}
-              team2Name={getTeamDisplay(selectedMatch.team2Id) as string}
+              team1Name={getTeamDisplay(selectedMatch.team1Id, selectedMatch.id, 'team1Id', false) as string}
+              team2Name={getTeamDisplay(selectedMatch.team2Id, selectedMatch.id, 'team2Id', false) as string}
               isAdmin={isAdmin}
               onUpdate={handleScoreUpdate}
               onScheduleUpdate={onScheduleUpdate}
             />
+          </div>
+        </div>
+      )}
+
+      {manualSelectData && isAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(11,12,16,0.8)] backdrop-blur-sm p-4 animate-fade-in">
+          <div className="glass-panel p-6 max-w-sm w-full relative border-[rgba(0,243,255,0.4)] shadow-[0_0_30px_rgba(0,243,255,0.2)]">
+            <button onClick={() => setManualSelectData(null)} className="absolute top-4 right-4 text-gray-400 hover:text-white">✕</button>
+            <h3 className="text-lg font-bold text-neon-blue mb-4">Seleziona Squadra (Ripescaggio)</h3>
+            <p className="text-sm text-gray-400 mb-4">L'algoritmo ha rilevato una parità assoluta. Seleziona manualmente quale squadra deve avanzare nel tabellone.</p>
+
+            <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
+                {nonQualifiedTeams.length === 0 && <p className="text-sm text-gray-500 italic">Nessuna squadra disponibile.</p>}
+                {nonQualifiedTeams.map(team => (
+                    <button
+                        key={team.id}
+                        onClick={async () => {
+                            await setManualKnockoutTeam(manualSelectData.matchId, team.id, manualSelectData.slot);
+                            setManualSelectData(null);
+                        }}
+                        className="text-left p-3 bg-[rgba(0,0,0,0.3)] hover:bg-[#1f2833] rounded border border-[rgba(255,255,255,0.05)] hover:border-neon-blue transition-colors text-sm font-medium"
+                    >
+                        {team.name}
+                    </button>
+                ))}
+            </div>
           </div>
         </div>
       )}

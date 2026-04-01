@@ -87,6 +87,7 @@ interface TournamentState {
   updateMatchScoreRealtime: (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean, matchStatus: 'scheduled' | 'live' | 'finished', tournamentId: string, apiKey: string) => Promise<void>;
   generateKnockoutBracket: (tournamentId: string) => Promise<void>;
   archiveTournament: (tournamentId: string) => Promise<void>;
+  setManualKnockoutTeam: (matchId: string, teamId: string, slot: 'team1Id' | 'team2Id') => Promise<void>;
 }
 
 export const useTournamentStore = create<TournamentState>((set, get) => ({
@@ -504,18 +505,63 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     if (!tournament || tournament.id !== tournamentId) return;
 
     const qualifiers: Team[] = [];
+    const nonQualifiers: Team[] = [];
     const qCount = tournament.qualificationRules?.qualifiersPerGroup || 2;
 
     tournament.groups.forEach(group => {
-       for (let i = 0; i < Math.min(qCount, group.teams.length); i++) {
-           qualifiers.push({ ...group.teams[i], _originalGroupIndex: i } as any);
+       for (let i = 0; i < group.teams.length; i++) {
+           if (i < qCount) {
+               qualifiers.push({ ...group.teams[i], _originalGroupIndex: i } as any);
+           } else {
+               nonQualifiers.push({ ...group.teams[i], _originalGroupIndex: i } as any);
+           }
        }
     });
 
-    const totalQualifiers = qualifiers.length;
+    let totalQualifiers = qualifiers.length;
     if (totalQualifiers < 2) return;
 
     let bracketSize = Math.pow(2, Math.ceil(Math.log2(totalQualifiers)));
+
+    // Classifica Avulsa: Ripescaggio
+    if (totalQualifiers < bracketSize) {
+        const missingTeams = bracketSize - totalQualifiers;
+
+        // Ordina i non qualificati
+        nonQualifiers.sort((a, b) => {
+            if (b.points !== a.points) return b.points - a.points;
+            if (b.setsWon !== a.setsWon) return b.setsWon - a.setsWon;
+            if (b.totalPointsScored !== a.totalPointsScored) return b.totalPointsScored - a.totalPointsScored;
+            return a.totalPointsConceded - b.totalPointsConceded; // Minore è meglio
+        });
+
+        // Controlla se c'è parità assoluta al taglio (tra l'ultimo ripescato e il primo escluso)
+        let hasAbsoluteTie = false;
+        if (nonQualifiers.length > missingTeams) {
+            const lastIn = nonQualifiers[missingTeams - 1];
+            const firstOut = nonQualifiers[missingTeams];
+            if (
+                lastIn.points === firstOut.points &&
+                lastIn.setsWon === firstOut.setsWon &&
+                lastIn.totalPointsScored === firstOut.totalPointsScored &&
+                lastIn.totalPointsConceded === firstOut.totalPointsConceded
+            ) {
+                hasAbsoluteTie = true;
+            }
+        }
+
+        for (let i = 0; i < missingTeams; i++) {
+            if (nonQualifiers[i]) {
+                if (hasAbsoluteTie && i === missingTeams - 1) {
+                     // Inseriamo un placeholder speciale per l'inserimento manuale
+                     qualifiers.push({ id: 'dummy_tie', name: 'TBD (Parità)', players: [], points: 0, setsWon: 0, setsLost: 0, totalPointsScored: 0, totalPointsConceded: 0 });
+                } else {
+                     qualifiers.push(nonQualifiers[i]);
+                }
+            }
+        }
+        totalQualifiers = qualifiers.length;
+    }
 
     const seeds: Team[] = [];
     for (let pos = 0; pos < qCount; pos++) {
@@ -606,11 +652,18 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     }
 
     const firstPhaseIds = phasesTree[0];
+
+    // Per un vero ripescaggio, usiamo i qualifiers invece dei soli seeds per mappare tutto il tabellone se bracketSize == totalQualifiers
+    // Ordiniamo qualifiers in modo da simulare un bracket standard (primo contro ultimo)
+    // Semplificato: incrocio speculare su array qualifiers
     for (let i = 0; i < firstPhaseIds.length; i++) {
         const match = bracketMatches.find(m => m.id === firstPhaseIds[i]);
         if (match) {
-            match.team1Id = seeds[i]?.id || null;
-            match.team2Id = seeds[bracketSize - 1 - i]?.id || null;
+            const t1 = qualifiers[i];
+            const t2 = qualifiers[bracketSize - 1 - i];
+
+            match.team1Id = t1?.id === 'dummy_tie' ? null : (t1?.id || null);
+            match.team2Id = t2?.id === 'dummy_tie' ? null : (t2?.id || null);
 
             if (tournament.isKnockoutHomeAway) {
                 const returnMatch = bracketMatches.find(m => m.nextMatchId === match.id && m.legIndex === 1);
@@ -668,5 +721,46 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
             isArchived: true
         }
     });
+  },
+
+  setManualKnockoutTeam: async (matchId, teamId, slot) => {
+    const state = get();
+    const tournament = state.currentTournament;
+    if (!tournament) return;
+
+    const batch = writeBatch(db);
+    const matchRef = doc(db, `tournaments/${tournament.id}/matches`, matchId);
+
+    batch.update(matchRef, { [slot]: teamId });
+
+    if (tournament.isKnockoutHomeAway) {
+        const firstLeg = tournament.matches.find(m => m.id === matchId);
+        if (firstLeg) {
+             const returnLeg = tournament.matches.find(m => m.nextMatchId === matchId && m.legIndex === 1);
+             if (returnLeg) {
+                 const returnSlot = slot === 'team1Id' ? 'team2Id' : 'team1Id';
+                 batch.update(doc(db, `tournaments/${tournament.id}/matches`, returnLeg.id), { [returnSlot]: teamId });
+             }
+        }
+    }
+
+    const publicRef = doc(db, 'public_tournaments', tournament.apiKey);
+    const publicDoc = await getDoc(publicRef);
+    if(publicDoc.exists()) {
+        const pubData = publicDoc.data();
+        let pubMatches = pubData.matches.map((m: Match) => {
+            if (m.id === matchId) {
+                return { ...m, [slot]: teamId };
+            }
+            if (tournament.isKnockoutHomeAway && m.nextMatchId === matchId && m.legIndex === 1) {
+                const returnSlot = slot === 'team1Id' ? 'team2Id' : 'team1Id';
+                return { ...m, [returnSlot]: teamId };
+            }
+            return m;
+        });
+        batch.update(publicRef, { matches: pubMatches });
+    }
+
+    await batch.commit();
   }
 }));
