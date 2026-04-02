@@ -328,12 +328,24 @@
             widgetDiv.innerHTML = html;
         }
 
+        function getTeamHtml(teamObj) {
+             if (!teamObj) return 'TBD';
+             const validPlayers = (teamObj.players || []).filter(p => p.trim() !== '');
+             let html = `<div style="display: flex; flex-direction: column;">`;
+             html += `<span style="font-weight: bold; font-size: 14px;">${teamObj.name}</span>`;
+             if (validPlayers.length > 0) {
+                 html += `<span style="font-size: 11px; color: rgba(255,255,255,0.6); font-style: italic;">${validPlayers.join(' & ')}</span>`;
+             }
+             html += `</div>`;
+             return html;
+        }
+
         function getTeamName(groups, teamId) {
             if (!teamId) return 'TBD';
             if (groups) {
                 for (const group of groups) {
                     const team = group.teams.find(t => t.id === teamId);
-                    if (team) return team.name;
+                    if (team) return getTeamHtml(team);
                 }
             }
             return 'TBD';

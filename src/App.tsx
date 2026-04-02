@@ -10,6 +10,7 @@ import TournamentView from './pages/TournamentView';
 import Login from './pages/Login';
 import PlayerDashboard from './pages/PlayerDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
+import TestLiveScore from './pages/TestLiveScore';
 
 import { useAuthStore } from './store/useAuthStore';
 
@@ -94,6 +95,7 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/tournament/:id" element={<TournamentView />} />
+              <Route path="/test-livescore" element={<TestLiveScore />} />
 
               {/* Protected Routes (Admin Only) */}
               <Route element={<ProtectedRoute requiredRole="admin" />}>
