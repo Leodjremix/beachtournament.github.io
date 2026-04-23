@@ -1,0 +1,10 @@
+We need to check if group matches change qualifiers. But the user rule says: "Se la partita rettificata faceva parte dei gironi: il sistema deve controllare se le squadre qualificate per le fasi finali sono cambiate. Se sì, deve aggiornare gli slot del tabellone con le nuove squadre corrette."
+If qualifiers change, we need to inject them back into the FIRST KNOCKOUT PHASE ONLY. Because we don't know who advanced. Wait, if we change the first phase, we might invalidate later phases. However, the requirement says "deve aggiornare gli slot del tabellone con le nuove squadre corrette".
+The simplest way is:
+1. Re-calculate qualifiers as in `generateKnockoutBracket`.
+2. Find the matches in the FIRST knockout phase. (e.g. `tournament.matches.filter(m => m.phaseType === firstKnockoutPhase)`). Wait, `generateKnockoutBracket` does exactly this:
+`const firstPhaseIds = phasesTree[0];` but it creates them. We can just query `tournament.matches` that are in the first phase. Wait, how do we know which matches are in the first phase?
+`generateKnockoutBracket` creates matches where `m.nextMatchId` is something, but who has `null` as their `nextMatchId`? The final.
+Wait, `m.phaseType` goes from 'round_of_32' -> 'round_of_16' -> 'quarter_finals' -> 'semi_finals' -> 'final'.
+We can figure out the first phase.
+Let's just re-run the `generateKnockoutBracket` logic just for updating the qualifiers in the existing matches.

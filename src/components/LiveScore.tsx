@@ -68,13 +68,23 @@ const LiveScore = ({ match, team1Name, team1Players, team2Name, team2Players, gr
 
   const closeMatch = async () => {
     if (!isAdmin || isUpdating) return;
-    if (window.confirm("Sei sicuro di voler chiudere la partita? Questo aggiornerà definitivamente le classifiche o l'avanzamento tabellone.")) {
+    const confirmMsg = match.isFinished
+        ? "Attenzione: la modifica di questo risultato ricalcolerà automaticamente classifiche e tabelloni. Confermi?"
+        : "Sei sicuro di voler chiudere la partita? Questo aggiornerà definitivamente le classifiche o l'avanzamento tabellone.";
+
+    if (window.confirm(confirmMsg)) {
         setIsUpdating(true);
         setIsFinished(true);
         setMatchStatus('finished');
         await onUpdate(match.id, t1Score, t2Score, true, 'finished');
         setIsUpdating(false);
     }
+  };
+
+  const reopenMatch = () => {
+    if (!isAdmin || isUpdating) return;
+    setIsFinished(false);
+    setMatchStatus('live');
   };
 
   const startMatch = async () => {
@@ -147,7 +157,7 @@ const LiveScore = ({ match, team1Name, team1Players, team2Name, team2Players, gr
                           <button onClick={() => handleScoreChange(isTeam1 ? 1 : 2, setIdx, -1)} disabled={isUpdating} className="p-1 text-gray-400 hover:text-red-400"><Minus className="w-3 h-3" /></button>
                         )}
 
-                        {isAdmin && !isFinished && matchStatus === 'live' ? (
+                        {isAdmin && (!isFinished || matchStatus === 'live') && (matchStatus === 'live') ? (
                             <input
                                 type="number"
                                 value={isTeam1 ? localT1Score[setIdx] : localT2Score[setIdx]}
@@ -206,20 +216,26 @@ const LiveScore = ({ match, team1Name, team1Players, team2Name, team2Players, gr
         })}
       </div>
 
-      {isAdmin && !isFinished && (
+      {isAdmin && (
         <div className="flex justify-between mt-2 pt-2 border-t border-[rgba(255,255,255,0.05)]">
-           {matchStatus === 'live' ? (
-               <>
-                   <button onClick={addSet} disabled={isUpdating} className="text-xs text-neon-blue hover:text-white flex items-center gap-1">
-                      <Plus className="w-3 h-3" /> Nuovo Set
+           {!isFinished ? (
+               matchStatus === 'live' ? (
+                   <>
+                       <button onClick={addSet} disabled={isUpdating} className="text-xs text-neon-blue hover:text-white flex items-center gap-1">
+                          <Plus className="w-3 h-3" /> Nuovo Set
+                       </button>
+                       <button onClick={closeMatch} disabled={isUpdating} className="btn-primary py-1 px-3 text-xs flex items-center gap-1">
+                          <Check className="w-3 h-3" /> {match.isFinished ? 'Salva Rettifica' : 'Chiudi Partita'}
+                       </button>
+                   </>
+               ) : (
+                   <button onClick={startMatch} disabled={isUpdating} className="w-full btn-secondary text-neon-orange border-neon-orange py-1 px-3 text-xs flex items-center justify-center gap-1 hover:bg-neon-orange hover:text-[#0b0c10]">
+                      <Play className="w-3 h-3" /> Avvia Partita LIVE
                    </button>
-                   <button onClick={closeMatch} disabled={isUpdating} className="btn-primary py-1 px-3 text-xs flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Chiudi Partita
-                   </button>
-               </>
+               )
            ) : (
-               <button onClick={startMatch} disabled={isUpdating} className="w-full btn-secondary text-neon-orange border-neon-orange py-1 px-3 text-xs flex items-center justify-center gap-1 hover:bg-neon-orange hover:text-[#0b0c10]">
-                  <Play className="w-3 h-3" /> Avvia Partita LIVE
+               <button onClick={reopenMatch} disabled={isUpdating} className="text-xs text-neon-orange hover:text-white flex items-center gap-1">
+                   <Clock className="w-3 h-3" /> Modifica Risultato
                </button>
            )}
         </div>

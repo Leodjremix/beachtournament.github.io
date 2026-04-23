@@ -308,21 +308,13 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     batch.update(matchRef, { team1Score, team2Score, isFinished, status: matchStatus });
 
     if (!isFinished) {
-       const publicRef = doc(db, 'public_tournaments', apiKey);
-       const publicDoc = await getDoc(publicRef);
-       if(publicDoc.exists()) {
-           const pubData = publicDoc.data();
-           const pubMatches = pubData.matches.map((m: Match) => m.id === matchId ? { ...m, team1Score, team2Score, isFinished, status: matchStatus } : m);
-           batch.update(publicRef, { matches: pubMatches });
-       }
-       await batch.commit();
-       return;
+       // Match reopened or updated while live
     }
 
     let updatedNextMatch: Match | null = null;
     let thirdPlaceMatchToUpdate: Match | null = null;
 
-    if (!isGroupMatch && isFinished && currentMatch.team1Id && currentMatch.team2Id) {
+    if (!isGroupMatch && currentMatch.team1Id && currentMatch.team2Id) {
         let winnerId: string | null = null;
         let loserId: string | null = null;
 
@@ -356,7 +348,13 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
             else if (t2SetsWon > t1SetsWon) { winnerId = currentMatch.team2Id; loserId = currentMatch.team1Id; }
         }
 
-        if (winnerId) {
+        if (winnerId || (!isFinished && currentMatch.isFinished)) {
+            // Se stiamo rettificando una partita chiusa (riaprendola) oppure se la abbiamo appena chiusa/modificata e abbiamo un nuovo vincitore
+            // Se riapriamo (!isFinished) dobbiamo "cancellare" la propagazione (togliere il vincitore dal match successivo)
+            // Se rettifichiamo con risultati diversi potremmo avere un nuovo winnerId e aggiorniamo.
+            // Gestiamo il reset del vincitore
+            const actualWinnerId = isFinished ? winnerId : null;
+
             const targetNextId = tournament.isKnockoutHomeAway ?
                 (tournament.matches.find(m => m.id === currentMatch.nextMatchId)?.nextMatchId) : currentMatch.nextMatchId;
 
@@ -366,8 +364,8 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
                     updatedNextMatch = { ...nextMatch };
                     const slot = tournament.isKnockoutHomeAway ? tournament.matches.find(m => m.id === currentMatch.nextMatchId)?.nextMatchSlot : currentMatch.nextMatchSlot;
 
-                    if (slot === 'team1') updatedNextMatch.team1Id = winnerId;
-                    else updatedNextMatch.team2Id = winnerId;
+                    if (slot === 'team1') updatedNextMatch.team1Id = actualWinnerId;
+                    else updatedNextMatch.team2Id = actualWinnerId;
 
                     batch.update(doc(db, `tournaments/${tournamentId}/matches`, nextMatch.id), {
                         team1Id: updatedNextMatch.team1Id,
@@ -378,19 +376,24 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
                          const nextNextReturn = tournament.matches.find(m => m.nextMatchId === nextMatch.id && m.legIndex === 1);
                          if (nextNextReturn) {
                              batch.update(doc(db, `tournaments/${tournamentId}/matches`, nextNextReturn.id), {
-                                 [slot === 'team1' ? 'team2Id' : 'team1Id']: winnerId
+                                 [slot === 'team1' ? 'team2Id' : 'team1Id']: actualWinnerId
                              });
                          }
                     }
                 }
             }
 
-            if (tournament.hasThirdPlaceMatch && currentMatch.phaseType === 'semi_finals' && loserId) {
+            if (tournament.hasThirdPlaceMatch && currentMatch.phaseType === 'semi_finals') {
+                const actualLoserId = isFinished ? loserId : null;
                 const thirdMatch = tournament.matches.find(m => m.phaseType === 'third_place');
                 if (thirdMatch) {
                     thirdPlaceMatchToUpdate = { ...thirdMatch };
-                    if (!thirdMatch.team1Id) thirdPlaceMatchToUpdate.team1Id = loserId;
-                    else thirdPlaceMatchToUpdate.team2Id = loserId;
+                    // We might not know which slot loser was. If it's resetting, we just reset both if it matches team1/team2. But without deep tracking, it's safer to check currentMatch's players.
+                    if (thirdMatch.team1Id === currentMatch.team1Id || thirdMatch.team1Id === currentMatch.team2Id || (!thirdMatch.team1Id && actualLoserId)) {
+                        thirdPlaceMatchToUpdate.team1Id = actualLoserId;
+                    } else if (thirdMatch.team2Id === currentMatch.team1Id || thirdMatch.team2Id === currentMatch.team2Id || (!thirdMatch.team2Id && actualLoserId)) {
+                        thirdPlaceMatchToUpdate.team2Id = actualLoserId;
+                    }
 
                     batch.update(doc(db, `tournaments/${tournamentId}/matches`, thirdMatch.id), {
                         team1Id: thirdPlaceMatchToUpdate.team1Id,
@@ -401,6 +404,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
         }
     }
 
+    // Always recalculate standings if group match, even if we are un-finishing it
     if (isGroupMatch && currentMatch.groupId) {
         const tournamentRef = doc(db, 'tournaments', tournamentId);
         const tournamentDoc = await getDoc(tournamentRef);
@@ -470,11 +474,83 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
 
             batch.update(tournamentRef, { groups: newGroupsCalculated });
 
+            // IF the tournament has already started knockout phase, we MUST update the qualifiers in the first phase.
+            let firstPhaseMatchesToUpdate: Match[] = [];
+            if (tData.hasKnockoutStarted) {
+                // Re-calculate qualifiers
+                const qualifiers: Team[] = [];
+                const qCount = tData.qualificationRules?.qualifiersPerGroup || 2;
+
+                newGroupsCalculated.forEach((group: Group) => {
+                   for (let i = 0; i < group.teams.length; i++) {
+                       if (i < qCount) {
+                           qualifiers.push({ ...group.teams[i], _originalGroupIndex: i } as any);
+                       }
+                   }
+                });
+
+                let totalQualifiers = qualifiers.length;
+                let bracketSize = Math.pow(2, Math.ceil(Math.log2(totalQualifiers)));
+
+                // Note: This simple reassignment assumes no wildcards or complex repêchage changed bracket size.
+                // We just re-inject the newly sorted qualifiers into the first phase matches.
+                // Trova la prima fase (quella in cui i team id correnti corrispondono ai team id qualificati in origine o hanno null se dummy_tie)
+                // Ma più semplicemente: la prima fase è quella che ha partite giocate nei gruppi ma inserite qui.
+                // Un modo robusto è prendere le partite di knockout che non hanno nessun'altra partita che punta a loro come "nextMatchId".
+                const knockoutMatches = allMatches.filter(m => m.phaseType !== 'groups' && m.phaseType !== 'third_place');
+                const nextMatchIds = new Set(knockoutMatches.map(m => m.nextMatchId).filter(Boolean));
+
+                // firstPhaseMatches: quelle che NON sono puntate da nessun nextMatchId
+                // Ma in realtà nel bracket generateKnockoutBracket crea nextMatchId.
+                // Chi non è nextMatchId di nessuno? Le partite iniziali!
+                const firstPhaseMatches = knockoutMatches.filter(m => !nextMatchIds.has(m.id) && m.legIndex === 0);
+
+                // Ordiniamo le prime partite (di solito sono in ordine di ID o possiamo usare lo stesso ordine in cui le abbiamo create)
+                // Assumiamo che siano rimaste nell'ordine corretto.
+                firstPhaseMatches.sort((a,b) => a.id.localeCompare(b.id));
+
+                for (let i = 0; i < firstPhaseMatches.length; i++) {
+                    const match = firstPhaseMatches[i];
+                    const t1 = qualifiers[i];
+                    const t2 = qualifiers[bracketSize - 1 - i];
+
+                    const newTeam1Id = t1?.id === 'dummy_tie' ? null : (t1?.id || null);
+                    const newTeam2Id = t2?.id === 'dummy_tie' ? null : (t2?.id || null);
+
+                    if (match.team1Id !== newTeam1Id || match.team2Id !== newTeam2Id) {
+                        batch.update(doc(db, `tournaments/${tournamentId}/matches`, match.id), {
+                            team1Id: newTeam1Id,
+                            team2Id: newTeam2Id
+                        });
+                        firstPhaseMatchesToUpdate.push({ ...match, team1Id: newTeam1Id, team2Id: newTeam2Id });
+
+                        if (tData.isKnockoutHomeAway) {
+                            const returnMatch = knockoutMatches.find(m => m.nextMatchId === match.id && m.legIndex === 1);
+                            if (returnMatch) {
+                                batch.update(doc(db, `tournaments/${tournamentId}/matches`, returnMatch.id), {
+                                    team1Id: newTeam2Id,
+                                    team2Id: newTeam1Id
+                                });
+                                firstPhaseMatchesToUpdate.push({ ...returnMatch, team1Id: newTeam2Id, team2Id: newTeam1Id });
+                            }
+                        }
+                    }
+                }
+            }
+
             const publicRef = doc(db, 'public_tournaments', apiKey);
             const publicDoc = await getDoc(publicRef);
             if(publicDoc.exists()) {
                 const pubData = publicDoc.data();
-                const pubMatches = pubData.matches.map((m: Match) => m.id === matchId ? { ...m, team1Score, team2Score, isFinished, status: matchStatus } : m);
+                let pubMatches = pubData.matches.map((m: Match) => m.id === matchId ? { ...m, team1Score, team2Score, isFinished, status: matchStatus } : m);
+
+                if (firstPhaseMatchesToUpdate.length > 0) {
+                     pubMatches = pubMatches.map((m: Match) => {
+                         const updated = firstPhaseMatchesToUpdate.find(u => u.id === m.id);
+                         return updated ? { ...m, team1Id: updated.team1Id, team2Id: updated.team2Id } : m;
+                     });
+                }
+
                 batch.update(publicRef, {
                     matches: pubMatches,
                     groups: newGroupsCalculated
