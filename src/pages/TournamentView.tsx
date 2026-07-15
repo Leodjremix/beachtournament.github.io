@@ -2,15 +2,17 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTournamentStore } from '../store/useTournamentStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { ArrowLeft, Check, Copy, Trophy, Play, PartyPopper } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Trophy, Play, PartyPopper, KeyRound, Maximize2 } from 'lucide-react';
 import GroupStandings from '../components/GroupStandings';
 import LiveScore from '../components/LiveScore';
+import ScoreboardView from '../components/ScoreboardView';
 import { KnockoutBracket } from '../components/KnockoutBracket';
 
 const TournamentView = () => {
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState<'standings' | 'matches' | 'bracket'>('standings');
   const [copied, setCopied] = useState(false);
+  const [scoreboardMatchId, setScoreboardMatchId] = useState<string | null>(null);
 
   const { currentTournament, updateMatchScoreRealtime, updateMatchSchedule, subscribeToTournament, generateKnockoutBracket, archiveTournament } = useTournamentStore();
   const { userRole } = useAuthStore();
@@ -125,22 +127,31 @@ const TournamentView = () => {
                 const group = currentTournament.groups.find(g => g.id === match.groupId);
                 const team1 = group?.teams.find(t => t.id === match.team1Id);
                 const team2 = group?.teams.find(t => t.id === match.team2Id);
-
                 if (!team1 || !team2) return null;
-
                 return (
-                  <LiveScore
-                    key={match.id}
-                    match={match}
-                    team1Name={team1.name}
-                    team1Players={team1.players}
-                    team2Name={team2.name}
-                    team2Players={team2.players}
-                    groupName={group?.name}
-                    isAdmin={isAdmin}
-                    onUpdate={handleScoreUpdate}
-                    onScheduleUpdate={handleScheduleUpdate}
-                  />
+                  <div key={match.id} className="relative group">
+                    <LiveScore
+                      key={match.id}
+                      match={match}
+                      team1Name={team1.name}
+                      team1Players={team1.players}
+                      team2Name={team2.name}
+                      team2Players={team2.players}
+                      groupName={group?.name}
+                      isAdmin={isAdmin}
+                      onUpdate={handleScoreUpdate}
+                      onScheduleUpdate={handleScheduleUpdate}
+                    />
+                    {isAdmin && (
+                      <button
+                        onClick={() => setScoreboardMatchId(match.id)}
+                        className="absolute top-2 right-2 z-10 p-2 bg-neon-blue/50 hover:bg-neon-blue/70 rounded-full transition-colors text-neon-blue hover:text-white"
+                        title="Apri Scoreboard Fullscreen"
+                      >
+                        <Maximize2 className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -175,6 +186,13 @@ const TournamentView = () => {
           </div>
         )}
       </div>
+
+      {/* Scoreboard Modal/View */}
+      {scoreboardMatchId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <ScoreboardView matchId={scoreboardMatchId} onClose={() => setScoreboardMatchId(null)} />
+        </div>
+      )}
     </div>
   );
 };
