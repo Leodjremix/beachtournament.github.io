@@ -38,76 +38,112 @@ export default function ScoreboardView({ matchId, onClose }: Props) {
   const t1Name = team1 ? `${team1.players[0] ?? ''} & ${team1.players[1] ?? ''}` : 'Squadra 1';
   const t2Name = team2 ? `${team2.players[0] ?? ''} & ${team2.players[1] ?? ''}` : 'Squadra 2';
 
-  // Current scores - use useState to track local state that syncs with Firestore
-  const [t1Score, setT1Score] = useState(match.team1Score[0] || 0);
-  const [t2Score, setT2Score] = useState(match.team2Score[0] || 0);
-  const [t1Sets, setT1Sets] = useState(match.team1Score.length > 1 ? match.team1Score[1] || 0 : 0);
-  const [t2Sets, setT2Sets] = useState(match.team2Score.length > 1 ? match.team2Score[1] || 0 : 0);
+  // Local state for scores arrays (mirrors Firestore)
+  const [t1Scores, setT1Scores] = useState<number[]>(match.team1Score.slice());
+  const [t2Scores, setT2Scores] = useState<number[]>(match.team2Score.slice());
 
-  // Sync with tournament store updates (for real-time updates from other users)
+  // Sync with store updates (real-time from other users)
   useEffect(() => {
     const updatedMatch = currentTournament.matches.find(m => m.id === matchId);
     if (updatedMatch) {
-      setT1Score(updatedMatch.team1Score[0] || 0);
-      setT2Score(updatedMatch.team2Score[0] || 0);
-      setT1Sets(updatedMatch.team1Score.length > 1 ? updatedMatch.team1Score[1] || 0 : 0);
-      setT2Sets(updatedMatch.team2Score.length > 1 ? updatedMatch.team2Score[1] || 0 : 0);
+      setT1Scores(updatedMatch.team1Score.slice());
+      setT2Scores(updatedMatch.team2Score.slice());
     }
   }, [currentTournament.matches, matchId]);
 
-  // Handle score increment
+  // Derived values: sets won and current set points
+  const t1SetsWon = t1Scores.reduce((acc, score, idx) => {
+    const oppScore = t2Scores[idx] ?? 0;
+    return score > oppScore ? acc + 1 : acc;
+  }, 0);
+  const t2SetsWon = t2Scores.reduce((acc, score, idx) => {
+    const oppScore = t1Scores[idx] ?? 0;
+    return score > oppScore ? acc + 1 : acc;
+  }, 0);
+
+  const currentSetIndex = Math.max(t1Scores.length, t2Scores.length) - 1;
+  const t1Current = t1Scores[currentSetIndex] ?? 0;
+  const t2Current = t2Scores[currentSetIndex] ?? 0;
+
+  // Helper to update Firestore
+  const updateScores = (newT1: number[], newT2: number[], isFinished: boolean, status: 'scheduled' | 'live' | 'finished') => {
+    updateMatchScoreRealtime(
+      match.id,
+      newT1,
+      newT2,
+      isFinished,
+      status,
+      currentTournament.id,
+      currentTournament.apiKey
+    );
+  };
+
+  // Increment point in current set
   const incrementScore = (team: 1 | 2) => {
-    const newT1Score = team === 1 ? t1Score + 1 : t1Score;
-    const newT2Score = team === 2 ? t2Score + 1 : t2Score;
-    setT1Score(newT1Score);
-    setT2Score(newT2Score);
-
-    // Update Firestore in real-time
-    updateMatchScoreRealtime(match.id, [newT1Score, t1Sets], [newT2Score, t2Sets], false, 'live', currentTournament.id, currentTournament.apiKey);
-  };
-
-  // Handle score decrement (for corrections)
-  const decrementScore = (team: 1 | 2) => {
-    if (team === 1 && t1Score > 0) {
-      const newT1Score = t1Score - 1;
-      setT1Score(newT1Score);
-      updateMatchScoreRealtime(match.id, [newT1Score, t1Sets], [t2Score, t2Sets], false, 'live', currentTournament.id, currentTournament.apiKey);
-    } else if (team === 2 && t2Score > 0) {
-      const newT2Score = t2Score - 1;
-      setT2Score(newT2Score);
-      updateMatchScoreRealtime(match.id, [t1Score, t1Sets], [newT2Score, t2Sets], false, 'live', currentTournament.id, currentTournament.apiKey);
-    }
-  };
-
-  // Handle set win
-  const winSet = (team: 1 | 2) => {
+    const newT1 = [...t1Scores];
+    const newT2 = [...t2Scores];
+    // ensure arrays have same length (at least 1)
+    if (newT1.length === 0) { newT1.push(0); }
+    if (newT2.length === 0) { newT2.push(0); }
     if (team === 1) {
-      const newT1Sets = t1Sets + 1;
-      const newT1Score = 0;
-      setT1Sets(newT1Sets);
-      setT1Score(newT1Score);
-      updateMatchScoreRealtime(match.id, [newT1Score, newT1Sets], [t2Score, t2Sets], false, 'live', currentTournament.id, currentTournament.apiKey);
+      newT1[newT1.length - 1] = Math.max(0, newT1[newT1.length - 1] + 1);
     } else {
-      const newT2Sets = t2Sets + 1;
-      const newT2Score = 0;
-      setT2Sets(newT2Sets);
-      setT2Score(newT2Score);
-      updateMatchScoreRealtime(match.id, [t1Score, t1Sets], [newT2Score, newT2Sets], false, 'live', currentTournament.id, currentTournament.apiKey);
+      newT2[newT2.length - 1] = Math.max(0, newT2[newT2.length - 1] + 1);
+    }
+    setT1Scores(newT1);
+    setT2Scores(newT2);
+    updateScores(newT1, newT2, false, 'live');
+  };
+
+  // Decrement point (correction)
+  const decrementScore = (team: 1 | 2) => {
+    const newT1 = [...t1Scores];
+    const newT2 = [...t2Scores];
+    if (newT1.length === 0) { newT1.push(0); }
+    if (newT2.length === 0) { newT2.push(0); }
+    if (team === 1 && newT1[newT1.length - 1] > 0) {
+      newT1[newT1.length - 1] -= 1;
+      setT1Scores(newT1);
+      updateScores(newT1, newT2, false, 'live');
+    } else if (team === 2 && newT2[newT2.length - 1] > 0) {
+      newT2[newT2.length - 1] -= 1;
+      setT2Scores(newT2);
+      updateScores(newT1, newT2, false, 'live');
     }
   };
 
-  // Handle reset current set
-  const resetSet = () => {
-    const newT1Score = 0;
-    const newT2Score = 0;
-    setT1Score(newT1Score);
-    setT2Score(newT2Score);
-    updateMatchScoreRealtime(match.id, [newT1Score, t1Sets], [newT2Score, t2Sets], false, 'live', currentTournament.id, currentTournament.apiKey);
+  // Award set to team (finalize current set, start new set)
+  const winSet = (team: 1 | 2) => {
+    const newT1 = [...t1Scores];
+    const newT2 = [...t2Scores];
+    // ensure we have at least one set (current)
+    if (newT1.length === 0) { newT1.push(0); }
+    if (newT2.length === 0) { newT2.push(0); }
+    // push a new set (0-0) for both teams
+    newT1.push(0);
+    newT2.push(0);
+    setT1Scores(newT1);
+    setT2Scores(newT2);
+    updateScores(newT1, newT2, false, 'live');
   };
 
-  // Handle match completion
+  // Reset current set to 0-0 (without adding new set)
+  const resetSet = () => {
+    const newT1 = [...t1Scores];
+    const newT2 = [...t2Scores];
+    if (newT1.length === 0) { newT1.push(0); }
+    if (newT2.length === 0) { newT2.push(0); }
+    newT1[newT1.length - 1] = 0;
+    newT2[newT2.length - 1] = 0;
+    setT1Scores(newT1);
+    setT2Scores(newT2);
+    updateScores(newT1, newT2, false, 'live');
+  };
+
+  // Finish match
   const finishMatch = () => {
-    updateMatchScoreRealtime(match.id, [t1Score, t1Sets], [t2Score, t2Sets], true, 'finished', currentTournament.id, currentTournament.apiKey);
+    const isFinished = true;
+    updateScores(t1Scores, t2Scores, true, 'finished');
   };
 
   return (
@@ -137,10 +173,10 @@ export default function ScoreboardView({ matchId, onClose }: Props) {
         <div className="flex-1 flex flex-col">
           {/* Sets Score (Top Center) */}
           <div className="flex-1 flex flex-col items-center justify-center py-4">
-            <div className="text-4xl font-bold mb-2">
-              {t1Sets} - {t2Sets}
+            <div className="text-6xl font-bold mb-2">
+              {t1SetsWon} - {t2SetsWon}
             </div>
-            <div className="text-xl text-gray-400">Set</div>
+            <div className="text-xl text-gray-400">Set vinti</div>
           </div>
 
           {/* Main Score Area (Center) - Touch Friendly */}
@@ -152,9 +188,9 @@ export default function ScoreboardView({ matchId, onClose }: Props) {
               onTouchStart={() => incrementScore(1)}
             >
               <div className="text-9xl font-mono font-bold w-16 text-center">
-                {t1Score}
+                {t1Current}
               </div>
-              <div className="text-gray-400 text-xs mt-1">Punti</div>
+              <div className="text-gray-400 text-xs mt-1">Punti set corrente</div>
             </div>
 
             {/* Separator */}
@@ -167,9 +203,9 @@ export default function ScoreboardView({ matchId, onClose }: Props) {
               onTouchStart={() => incrementScore(2)}
             >
               <div className="text-9xl font-mono font-bold w-16 text-center">
-                {t2Score}
+                {t2Current}
               </div>
-              <div className="text-gray-400 text-xs mt-1">Punti</div>
+              <div className="text-gray-400 text-xs mt-1">Punti set corrente</div>
             </div>
           </div>
         </div>
