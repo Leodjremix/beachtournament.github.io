@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTournamentStore } from '../store/useTournamentStore';
+import { useAuthStore } from '../store/useAuthStore';
 import type { Match } from '../store/useTournamentStore';
-import { ArrowLeft, Volleyball, X } from 'lucide-react';
+import { Volleyball, X } from 'lucide-react';
 
 interface Props {
   matchId: string;
@@ -9,7 +10,9 @@ interface Props {
 }
 
 export default function ScoreboardView({ matchId, onClose }: Props) {
-  const { currentTournament, updateMatchScore, isAdmin } = useTournamentStore();
+  const { currentTournament, updateMatchScoreRealtime } = useTournamentStore();
+  const { userRole } = useAuthStore();
+  const isAdmin = userRole === 'admin';
 
   if (!currentTournament || !isAdmin) {
     return (
@@ -33,8 +36,8 @@ export default function ScoreboardView({ matchId, onClose }: Props) {
   const team1 = currentTournament.groups.flatMap(g => g.teams).find(t => t.id === match.team1Id);
   const team2 = currentTournament.groups.flatMap(g => g.teams).find(t => t.id === match.team2Id);
 
-  const t1Name = team1 ? `${team1.player1} & ${team1.player2}` : 'Squadra 1';
-  const t2Name = team2 ? `${team2.player1} & ${team2.player2}` : 'Squadra 2';
+  const t1Name = team1 ? `${team1.players[0] ?? ''} & ${team1.players[1] ?? ''}` : 'Squadra 1';
+  const t2Name = team2 ? `${team2.players[0] ?? ''} & ${team2.players[1] ?? ''}` : 'Squadra 2';
 
   // Current scores - use useState to track local state that syncs with Firestore
   const [t1Score, setT1Score] = useState(match.team1Score[0] || 0);
@@ -61,7 +64,7 @@ export default function ScoreboardView({ matchId, onClose }: Props) {
     setT2Score(newT2Score);
 
     // Update Firestore in real-time
-    updateMatchScore(match.id, [newT1Score, t1Sets], [newT2Score, t2Sets], false);
+    updateMatchScoreRealtime(match.id, [newT1Score, t1Sets], [newT2Score, t2Sets], false, 'live', currentTournament.id, currentTournament.apiKey);
   };
 
   // Handle score decrement (for corrections)
@@ -69,11 +72,11 @@ export default function ScoreboardView({ matchId, onClose }: Props) {
     if (team === 1 && t1Score > 0) {
       const newT1Score = t1Score - 1;
       setT1Score(newT1Score);
-      updateMatchScore(match.id, [newT1Score, t1Sets], [t2Score, t2Sets], false);
+      updateMatchScoreRealtime(match.id, [newT1Score, t1Sets], [t2Score, t2Sets], false, 'live', currentTournament.id, currentTournament.apiKey);
     } else if (team === 2 && t2Score > 0) {
       const newT2Score = t2Score - 1;
       setT2Score(newT2Score);
-      updateMatchScore(match.id, [t1Score, t1Sets], [newT2Score, t2Sets], false);
+      updateMatchScoreRealtime(match.id, [t1Score, t1Sets], [newT2Score, t2Sets], false, 'live', currentTournament.id, currentTournament.apiKey);
     }
   };
 
@@ -84,13 +87,13 @@ export default function ScoreboardView({ matchId, onClose }: Props) {
       const newT1Score = 0;
       setT1Sets(newT1Sets);
       setT1Score(newT1Score);
-      updateMatchScore(match.id, [newT1Score, newT1Sets], [t2Score, t2Sets], false);
+      updateMatchScoreRealtime(match.id, [newT1Score, newT1Sets], [t2Score, t2Sets], false, 'live', currentTournament.id, currentTournament.apiKey);
     } else {
       const newT2Sets = t2Sets + 1;
       const newT2Score = 0;
       setT2Sets(newT2Sets);
       setT2Score(newT2Score);
-      updateMatchScore(match.id, [t1Score, t1Sets], [newT2Score, newT2Sets], false);
+      updateMatchScoreRealtime(match.id, [t1Score, t1Sets], [newT2Score, newT2Sets], false, 'live', currentTournament.id, currentTournament.apiKey);
     }
   };
 
@@ -100,12 +103,12 @@ export default function ScoreboardView({ matchId, onClose }: Props) {
     const newT2Score = 0;
     setT1Score(newT1Score);
     setT2Score(newT2Score);
-    updateMatchScore(match.id, [newT1Score, t1Sets], [newT2Score, t2Sets], false);
+    updateMatchScoreRealtime(match.id, [newT1Score, t1Sets], [newT2Score, t2Sets], false, 'live', currentTournament.id, currentTournament.apiKey);
   };
 
   // Handle match completion
   const finishMatch = () => {
-    updateMatchScore(match.id, [t1Score, t1Sets], [t2Score, t2Sets], true);
+    updateMatchScoreRealtime(match.id, [t1Score, t1Sets], [t2Score, t2Sets], true, 'finished', currentTournament.id, currentTournament.apiKey);
   };
 
   return (

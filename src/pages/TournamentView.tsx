@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTournamentStore } from '../store/useTournamentStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { ArrowLeft, Check, Copy, Trophy, Play, PartyPopper, KeyRound, Maximize2 } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Trophy, Play, PartyPopper, Maximize2 } from 'lucide-react';
 import GroupStandings from '../components/GroupStandings';
 import LiveScore from '../components/LiveScore';
 import ScoreboardView from '../components/ScoreboardView';
@@ -33,12 +33,12 @@ const TournamentView = () => {
   };
 
   const handleScoreUpdate = async (matchId: string, team1Score: number[], team2Score: number[], isFinished: boolean, matchStatus: 'scheduled' | 'live' | 'finished') => {
-    if(!isAdmin) return;
+    if (!isAdmin) return;
     await updateMatchScoreRealtime(matchId, team1Score, team2Score, isFinished, matchStatus, currentTournament.id, currentTournament.apiKey);
   };
 
   const handleScheduleUpdate = async (matchId: string, scheduledTime: string) => {
-    if(!isAdmin) return;
+    if (!isAdmin) return;
     await updateMatchSchedule(matchId, scheduledTime, currentTournament.id, currentTournament.apiKey);
   };
 
