@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTournamentStore } from '../store/useTournamentStore';
 import { useAuthStore } from '../store/useAuthStore';
-import type { Match } from '../store/useTournamentStore';
 import { Volleyball, X } from 'lucide-react';
 
 interface Props {
