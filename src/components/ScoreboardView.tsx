@@ -113,7 +113,7 @@ export default function ScoreboardView({ matchId, onClose }: Props) {
   };
 
   // Award set to team (finalize current set, start new set)
-  const winSet = (team: 1 | 2) => {
+  const winSet = () => {
     const newT1 = [...t1Scores];
     const newT2 = [...t2Scores];
     // ensure we have at least one set (current)
@@ -142,7 +142,6 @@ export default function ScoreboardView({ matchId, onClose }: Props) {
 
   // Finish match
   const finishMatch = () => {
-    const isFinished = true;
     updateScores(t1Scores, t2Scores, true, 'finished');
   };
 
@@ -234,7 +233,7 @@ export default function ScoreboardView({ matchId, onClose }: Props) {
           {/* Set Management */}
           <div className="flex justify-center space-x-6">
             <button
-              onClick={() => winSet(1)}
+              onClick={() => winSet()}
               className="p-2 bg-neon-blue/50 hover:bg-neon-blue/70 rounded-full transition-colors text-neon-blue hover:text-white"
               title="Squadra 1 vince il set"
             >
@@ -242,7 +241,7 @@ export default function ScoreboardView({ matchId, onClose }: Props) {
             </button>
 
             <button
-              onClick={() => winSet(2)}
+              onClick={() => winSet()}
               className="p-2 bg-neon-orange/50 hover:bg-neon-orange/70 rounded-full transition-colors text-neon-orange hover:text-white"
               title="Squadra 2 vince il set"
             >
