@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTournamentStore } from '../store/useTournamentStore';
 import GroupStandings from '../components/GroupStandings';
 import LiveScore from '../components/LiveScore';
-import { ArrowLeft, KeyRound, Copy, Check } from 'lucide-react';
+import ScoreboardView from '../components/ScoreboardView';
+import { ArrowLeft, KeyRound, Copy, Check, Maximize2 } from 'lucide-react';
 
 export default function TournamentView() {
   const { id } = useParams();
@@ -13,6 +14,7 @@ export default function TournamentView() {
 
   const [activeTab, setActiveTab] = useState<'standings' | 'matches'>('standings');
   const [copied, setCopied] = useState(false);
+  const [scoreboardMatchId, setScoreboardMatchId] = useState<string | null>(null);
 
   // In a real app we'd fetch by ID from Firestore here,
   // for now we just show the current one if it matches.
@@ -89,7 +91,18 @@ export default function TournamentView() {
             <h2 className="text-2xl font-bold text-white border-b border-[rgba(255,255,255,0.1)] pb-2">Partite in Programma</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {currentTournament.matches.map(match => (
-                <LiveScore key={match.id} match={match} />
+                <div key={match.id} className="relative group">
+                  <LiveScore match={match} />
+                  {isAdmin && (
+                    <button
+                      onClick={() => setScoreboardMatchId(match.id)}
+                      className="absolute top-2 right-2 z-10 p-2 bg-neon-blue/50 hover:bg-neon-blue/70 rounded-full transition-colors text-neon-blue hover:text-white"
+                      title="Apri Scoreboard Fullscreen"
+                    >
+                      <Maximize2 className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
               ))}
 
               {currentTournament.matches.length === 0 && (
@@ -101,6 +114,13 @@ export default function TournamentView() {
           </div>
         )}
       </div>
+
+      {/* Scoreboard Modal/View */}
+      {scoreboardMatchId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <ScoreboardView matchId={scoreboardMatchId} onClose={() => setScoreboardMatchId(null)} />
+        </div>
+      )}
 
     </div>
   );
